@@ -6,12 +6,16 @@
 # Major upgrades (a new PostgreSQL, Python, TypeScript, … version) are left out on purpose: they're projects that
 # need planning and testing, not weekly updates. PostgreSQL in particular can't open the existing database files after
 # a major upgrade: that needs a dump and restore by hand. Security fixes within a version still come through.
+#
+# cooldown: a new release is only proposed once it's 14 days old, so a compromised or broken release is usually
+# caught and pulled before it reaches PEA. (Security updates don't wait.)
 version: 2
 updates:
   - package-ecosystem: uv
     directory: /pea_masters_backend
     target-branch: backup_test_branch
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 14 }
     groups:
       python-minor-and-patch: { update-types: [minor, patch] }
     ignore:
@@ -22,6 +26,7 @@ updates:
     directory: /pea_masters_frontend
     target-branch: backup_test_branch
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 14 }
     groups:
       frontend-minor-and-patch: { update-types: [minor, patch] }
     ignore:
@@ -32,6 +37,7 @@ updates:
     directories: [/pea_masters_backend, /deploy]
     target-branch: backup_test_branch
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 14 }
     ignore:
       # python:3.13 → 3.14 counts as "minor" to Dependabot, but it's a new Python: upgrade on purpose
       - dependency-name: python
@@ -43,6 +49,7 @@ updates:
     directory: /deploy
     target-branch: backup_test_branch
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 14 }
     ignore:
       # A new PostgreSQL major version can't read the database files: upgrading needs a dump and restore by hand
       - dependency-name: postgres
@@ -52,3 +59,4 @@ updates:
     directory: /
     target-branch: backup_test_branch
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 14 }
