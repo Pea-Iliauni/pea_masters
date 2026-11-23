@@ -13,9 +13,11 @@ sign in.
 | Role | Who | What they do |
 |---|---|---|
 | **Root** | The application's developers | Everything, in every organization |
-| **Admin** | The organization's responsible person | Manages people, roles, faculties and departments of the whole organization; Admins and Root grant the Admin role |
-| **Coordinator** | Head of a department | Registers the Researchers of their department, corrects their names, deactivates and reactivates them |
+| **Admin** | The organization's responsible person | Adds, deactivates and reactivates people; manages roles, faculties and departments of the whole organization; Admins and Root grant the Admin role |
+| **Coordinator** | Coordinates a department | Sends evaluation forms to the Researchers of their department, reviews them, and corrects their names |
 | **Researcher** | Academic staff (`member` in the database) | Keeps their profile and submits evaluations |
+
+Everyone can open **People** to find colleagues and their profiles (private profiles only show name and department).
 
 Structure: organization → **faculties** (schools, e.g. *School of Business, Technology and Education*) →
 **departments** (programs, e.g. *Computer Science*). Each Researcher belongs to a department; each department has one
@@ -177,18 +179,19 @@ Other frontend commands:
 
 ## 5. Register people
 
-After the first Admin exists, the normal way is the app: **Administration → People** (http://localhost:5173/admin/people).
+After the first Admin exists, the normal way is the app, as an Admin: **People** (http://localhost:5173/people).
 
 1. **Structure** tab → **Add faculty** for each faculty or school, then **Add department** for each department in it.
    Below that, **Add position** for each academic position (Professor, Associate Professor, …).
-2. **People** tab → **Add person**: email, name, department, academic position and roles.
-3. To make someone head of a department, edit them, tick **Coordinator** and choose the department under
-   **Head of department** (one head per department).
-4. Heads of department then open **People** themselves and use **Add researcher** to register their Researchers.
+2. **Add people**: type people in row by row, or **Download template**, fill it in Excel and **Fill from Excel**
+   (email, name (optional), faculty, department, roles; up to 1000 at a time). Nothing is saved until every row is
+   correct and you confirm. The same page deactivates people (tick **Deactivate**, or **X** in the Excel column).
+3. To make someone a Coordinator, edit them (pencil), tick **Coordinator** and choose their department under
+   **Coordinates department** (one Coordinator per department). Academic positions are set there too.
 
 **Names:** typing an ISU email (`name.surname.N@iliauni.edu.ge`) fills in the name. At the person's first sign-in,
 it's replaced by their official name from ISU's Google directory, which keeps it correct from then on. If an Admin or
-head corrects a name by hand, that correction is kept and Google never overwrites it.
+Coordinator corrects a name by hand, that correction is kept and Google never overwrites it.
 
 From the terminal (in `pea_masters_backend`), mainly for the first Admin:
 
