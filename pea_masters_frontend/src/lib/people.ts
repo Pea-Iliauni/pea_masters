@@ -44,21 +44,14 @@ export type Person = {
 }
 
 export type PeopleList = {
+  /** Admins: everyone. Others: active people, without statuses' details or last sign-ins */
   people: Person[]
-  /** Admins, and Coordinators for their own department */
+  /** Admins: add, deactivate and reactivate people */
   can_register: boolean
   /** Admins: roles, moving people between departments, structure */
   can_manage_roles: boolean
-}
-
-export type PersonInput = {
-  email: string
-  display_name: string
-  roles: Role[]
-  department_id: string | null
-  coordinates_unit_id: string | null
-  /** Admins only */
-  position_id: string | null
+  /** Whose name this person may correct: everyone for Admins, a Coordinator's own Researchers */
+  editable: string[]
 }
 
 /** Picks the name in the interface language, falling back to the other one */
@@ -69,7 +62,7 @@ export function localName(name: LocalizedName, language: "KA" | "EN") {
 export const roleLabels: Record<Role, string> = { admin: "Admin", coordinator: "Coordinator", member: "Researcher" }
 export const roleHints: Record<Role, string> = {
   admin: "The organization's responsible person: manages people, roles and structure.",
-  coordinator: "Coordinates a department: registers and manages its Researchers.",
+  coordinator: "Coordinates a department: sends and reviews its Researchers' evaluations.",
   member: "Keeps a researcher profile and submits evaluations.",
 }
 export const statusLabels: Record<PersonStatus, string> = { invited: "Invited", active: "Active", deactivated: "Deactivated" }
@@ -87,11 +80,58 @@ export function groupByFaculty(units: Unit[], language: "KA" | "EN"): FacultyGro
   return groups
 }
 
+/** Faculties with their departments under them, for a FilterMenu; ticking a faculty includes its departments */
+export function unitFilterOptions(units: Unit[], language: "KA" | "EN") {
+  return groupByFaculty(units, language).flatMap(group => [
+    ...(group.faculty ? [{ value: group.faculty.id, label: localName(group.faculty.name, language) }] : []),
+    ...group.departments.map(unit => ({ value: unit.id, label: localName(unit.name, language), parent: group.faculty?.id })),
+  ])
+}
+
+/** Whether someone is in one of the ticked departments or faculties (nothing ticked: everyone) */
+export const inUnits = (person: Pick<Person, "department" | "faculty">, units: ReadonlySet<string>) =>
+  units.size === 0 || (person.department !== null && units.has(person.department.id)) || (person.faculty !== null && units.has(person.faculty.id))
+
+/** Lower case, without accents or extra spaces, so "Nino" finds "nino" and "Kapanadze " finds "kapanadze" */
+export const searchText = (text: string) => text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim()
+
+/**
+ * What a person can be found by (name, email, department, faculty, position, in both languages), prepared once
+ * per list so typing in the search box only compares strings.
+ */
+export function searchKeys(people: Person[]): Map<string, string> {
+  const names = (ref: UnitRef | null) => (ref ? Object.values(ref.name).join(" ") : "")
+  return new Map(people.map(person => [person.id, searchText(
+    [person.display_name, person.email, names(person.department), names(person.faculty), names(person.position)].join(" "))]))
+}
+
+/** The link to someone's page; keeps the organization, for people in several */
+export const personPath = (userId: string, orgId: string) => `/people/${userId}?org=${orgId}`
+
 const base = (orgId: string) => `/orgs/${orgId}`
+
+/** A person's page (app/person_pages.py): their profile as colleagues see it */
+export type PersonPage = {
+  person: Person
+  /** False: the profile is private, and only `person` is filled in */
+  visible: boolean
+  own: boolean
+  /** The owner made it private (reviewers still see it, with a note) */
+  private: boolean
+  photo_url: string | null
+  biography: Partial<Record<"en" | "ka", string>>
+  /** Section id -> entries, newest first, without supporting documents */
+  entries: Record<string, { id: string; values: Record<string, string> }[]>
+  research: import("./profile-entries").ResearchOverview
+  teaching: { interests: string[] }
+  outputs: import("./research-outputs").ResearchOutput[]
+  /** The CV builder's CV, when its owner made it public (private contact details and metrics already removed) */
+  cv: unknown | null
+}
 
 export const peopleApi = {
   list: (orgId: string) => api<PeopleList>(`${base(orgId)}/people`),
-  register: (orgId: string, input: PersonInput) => api<Person>(`${base(orgId)}/people`, { method: "POST", body: input }),
+  page: (orgId: string, userId: string) => api<PersonPage>(`${base(orgId)}/people/${userId}/page`),
   update: (orgId: string, userId: string, changes: { display_name?: string; department_id?: string | null; position_id?: string | null }) =>
     api<Person>(`${base(orgId)}/people/${userId}`, { method: "PATCH", body: changes }),
   setRoles: (orgId: string, userId: string, body: { roles: Role[]; coordinates_unit_id: string | null; reason: string | null }) =>

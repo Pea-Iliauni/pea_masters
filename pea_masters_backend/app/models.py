@@ -192,7 +192,9 @@ class Profile(Base):
     research: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")  # app/profile_entries.py
     teaching: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
     photo_file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id"))
-    is_public: Mapped[bool] = mapped_column(server_default="false")
+    is_public: Mapped[bool] = mapped_column(server_default="true")  # false: only the person and their reviewers
+    show_email: Mapped[bool] = mapped_column(server_default="true")  # to colleagues; reviewers always see it
+    show_photo: Mapped[bool] = mapped_column(server_default="true")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 

@@ -121,26 +121,17 @@ def test_people_go_into_departments_not_faculties(as_admin, base):
     assert response.json()["results"][0]["code"] == "not_a_department"
 
 
-def test_coordinators_import_researchers_into_their_own_department_only(as_admin, signed_in, base, db):
+def test_only_admins_can_import(as_admin, signed_in, base, db):
     cs = add_department(as_admin, base, "Computer Science")
-    math = add_department(as_admin, base, "Mathematics")
     head = register(as_admin, base, "head.cs@iliauni.edu.ge", roles=["coordinator", "member"], coordinates=cs,
                     department_id=cs).json()
+    register(as_admin, base, "own.researcher@iliauni.edu.ge", department_id=cs)
     coordinator = as_person(signed_in, db, head)
-
-    refused = run(coordinator, base, [
-        row("new.admin@iliauni.edu.ge", roles=["admin"], department_id=cs),
-        row("other.dept@iliauni.edu.ge", department_id=math),
-    ], save=True)
-    assert [r["code"] for r in refused.json()["results"]] == ["researchers_only", "own_department_only"]
-
-    # No department given: they join the one department this Coordinator heads
-    saved = run(coordinator, base, [row("new.one@iliauni.edu.ge"), row("new.two@iliauni.edu.ge", department_id=cs)],
-                save=True)
-    assert saved.json()["registered"] == 2
-    people = {p["email"]: p for p in as_admin.get(f"{base}/people").json()["people"]}
-    assert people["new.one@iliauni.edu.ge"]["department"]["id"] == cs
-    assert people["new.one@iliauni.edu.ge"]["roles"] == ["member"]
+    assert run(coordinator, base, [row("new.one@iliauni.edu.ge", department_id=cs)], save=True).status_code == 403
+    assert run(coordinator, base, [deactivate("own.researcher@iliauni.edu.ge")], save=True).status_code == 403
+    db.expire_all()
+    assert db.scalar(select(User).where(User.email == "new.one@iliauni.edu.ge")) is None
+    assert status_of(as_admin, base, "own.researcher@iliauni.edu.ge") != "deactivated"
 
 
 def test_researchers_cannot_import(as_admin, signed_in, base, db):
@@ -182,25 +173,6 @@ def test_deactivation_rows_follow_the_same_rules(as_admin, admin, signed_in, bas
     ], save=True)
     assert [r["code"] for r in response.json()["results"]] == [
         "already_deactivated", "not_registered", "cannot_deactivate_self"]
-
-
-def test_coordinators_deactivate_only_their_own_researchers(as_admin, signed_in, base, db):
-    cs = add_department(as_admin, base, "Computer Science")
-    math = add_department(as_admin, base, "Mathematics")
-    head = register(as_admin, base, "head.cs@iliauni.edu.ge", roles=["coordinator", "member"], coordinates=cs,
-                    department_id=cs).json()
-    register(as_admin, base, "own.researcher@iliauni.edu.ge", department_id=cs)
-    register(as_admin, base, "math.researcher@iliauni.edu.ge", department_id=math)
-    register(as_admin, base, "cs.admin@iliauni.edu.ge", roles=["admin", "member"], department_id=cs)
-    coordinator = as_person(signed_in, db, head)
-
-    response = run(coordinator, base, [deactivate("math.researcher@iliauni.edu.ge"),
-                                       deactivate("cs.admin@iliauni.edu.ge")], save=True)
-    assert [r["code"] for r in response.json()["results"]] == ["not_registered", "researchers_only"]
-    assert response.json()["results"][0]["message"] == "Nobody with this email is registered in your department."
-    assert run(coordinator, base, [deactivate("own.researcher@iliauni.edu.ge")], save=True).json()["deactivated"] == 1
-    assert status_of(as_admin, base, "own.researcher@iliauni.edu.ge") == "deactivated"
-    assert status_of(as_admin, base, "math.researcher@iliauni.edu.ge") != "deactivated"
 
 
 def test_the_last_admin_cannot_be_deactivated_from_a_list(as_admin, signed_in, base, db):

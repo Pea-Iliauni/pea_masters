@@ -16,8 +16,6 @@ export type Settings = {
   /** Colour theme (Settings > Customization) */
   theme: ThemeId
   profileVisibility: "public" | "university" | "private"
-  showEmail: boolean
-  showPhoto: boolean
   searchIndexing: boolean
 }
 
@@ -37,8 +35,6 @@ export const defaultSettings: Settings = {
   reduceMotion: false,
   theme: "light",
   profileVisibility: "public",
-  showEmail: true,
-  showPhoto: true,
   searchIndexing: true,
 }
 

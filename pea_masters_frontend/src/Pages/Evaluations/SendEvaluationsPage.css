@@ -58,3 +58,7 @@
 
 .send-extended { color: var(--color-brand-700); }
 .deadline-remove { align-self: flex-start; }
+
+/* Department filter and "Select everyone shown" above the list */
+.send-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
+.send-clear { padding: 0; }

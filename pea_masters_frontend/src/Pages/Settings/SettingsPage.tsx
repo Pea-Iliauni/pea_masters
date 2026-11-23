@@ -7,7 +7,8 @@ import { Switch } from "@/components/forms/Switch"
 import "@/components/forms/forms.css"
 import { useLanguage } from "@/lib/language-context"
 import { signOut, useSession } from "@/lib/auth"
-import { useIdentity, useProfile } from "@/lib/profile"
+import { saveVisibility, useIdentity, useMyProfile, useProfile } from "@/lib/profile"
+import { ApiError } from "@/lib/api"
 import { applyDisplaySettings, loadSettings, saveSettings, type Settings } from "@/lib/settings"
 import { themes, type ThemeId } from "@/lib/themes"
 import { timeZones } from "./settingsMock"
@@ -349,41 +350,106 @@ function CustomizationSection({ theme, onChange }: { theme: ThemeId; onChange: (
 
 /* ---------- Privacy ---------- */
 
-const visibilityOptions: { value: Settings["profileVisibility"]; label: string; hint: string }[] = [
-  { value: "public", label: "Public", hint: "Anyone with the link, including people outside the university." },
-  { value: "university", label: "University only", hint: "Only signed-in Ilia State University staff and students." },
-  { value: "private", label: "Private", hint: "Only you and the admins who evaluate you." },
+const visibilityOptions: { value: "public" | "private"; label: string; hint: string }[] = [
+  { value: "public", label: "Everyone at the university", hint: "Anyone signed in to PEA can open your profile from the People page." },
+  { value: "private", label: "Private", hint: "Only you, your organization's Admins and your Coordinator, who review you. Others see your name and department, and that your profile is private." },
 ]
 
-function PrivacySection({ settings, onChange }: { settings: Settings; onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void }) {
-  const hidden = settings.profileVisibility === "private"
+/** Saved on the server right away (app/profiles.py, PUT /me/profile/visibility) */
+function ProfileVisibility() {
+  const { profile } = useMyProfile()
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
+  // The choice shows at once; if saving fails it goes back
+  const [pending, setPending] = useState<"public" | "private" | null>(null)
+  const current = pending ?? (profile ? (profile.is_public ? "public" : "private") : null)
+
+  async function choose(value: "public" | "private") {
+    if (saving || value === current) return
+    setSaving(true)
+    setPending(value)
+    setMessage(null)
+    try {
+      await saveVisibility({ is_public: value === "public" })
+      setMessage({ ok: true, text: value === "public" ? "Your profile is visible to everyone at the university." : "Your profile is private." })
+    } catch (cause) {
+      setMessage({ ok: false, text: cause instanceof ApiError ? cause.message : "Couldn't save. Please try again." })
+    } finally {
+      setSaving(false)
+      setPending(null)
+    }
+  }
+
+  return (
+    <section className="dashboard-card settings-card" aria-labelledby="visibility-heading" aria-busy={saving}>
+      <div className="card-heading"><h2 id="visibility-heading">Who can see your profile</h2></div>
+      <div className="settings-radio-group" role="radiogroup" aria-labelledby="visibility-heading">
+        {visibilityOptions.map(option => (
+          <label key={option.value} className="settings-radio">
+            <input type="radio" name="profile-visibility" value={option.value} checked={current === option.value}
+              disabled={current === null || saving} onChange={() => void choose(option.value)} />
+            <span>
+              <span className="settings-radio-label">{option.label}</span>
+              <small>{option.hint}</small>
+            </span>
+          </label>
+        ))}
+      </div>
+      {message && <p className={message.ok ? "settings-saved" : "field-error"} role="status">{message.ok && <Check aria-hidden="true" />}{message.text}</p>}
+    </section>
+  )
+}
+
+/** "Show my email" and "Show my photo": saved on the server right away, like the visibility choice */
+function ProfileShows({ hidden }: { hidden: boolean }) {
+  const { profile } = useMyProfile()
+  // A switch shows its new position at once; if saving fails it goes back
+  const [pending, setPending] = useState<{ show_email?: boolean; show_photo?: boolean }>({})
+  const [failure, setFailure] = useState("")
+
+  async function toggle(key: "show_email" | "show_photo", value: boolean) {
+    setPending(current => ({ ...current, [key]: value }))
+    setFailure("")
+    try {
+      await saveVisibility({ [key]: value })
+    } catch (cause) {
+      setFailure(cause instanceof ApiError ? cause.message : "Couldn't save. Please try again.")
+    } finally {
+      setPending(current => {
+        const next = { ...current }
+        delete next[key]
+        return next
+      })
+    }
+  }
+
+  const value = (key: "show_email" | "show_photo") => pending[key] ?? profile?.[key] ?? true
+  const off = !profile || hidden
   return (
     <>
-      <section className="dashboard-card settings-card" aria-labelledby="visibility-heading">
-        <div className="card-heading"><h2 id="visibility-heading">Public profile visibility</h2></div>
-        <div className="settings-radio-group" role="radiogroup" aria-labelledby="visibility-heading">
-          {visibilityOptions.map(option => (
-            <label key={option.value} className="settings-radio">
-              <input type="radio" name="profile-visibility" value={option.value} checked={settings.profileVisibility === option.value} onChange={() => onChange("profileVisibility", option.value)} />
-              <span>
-                <span className="settings-radio-label">{option.label}</span>
-                <small>{option.hint}</small>
-              </span>
-            </label>
-          ))}
-        </div>
-      </section>
+      <SettingRow id="show-email" label="Show my email address" hint="On the People page and your profile. Your Admins and Coordinator always see it.">
+        <Switch checked={value("show_email")} onChange={next => void toggle("show_email", next)} labelledBy="show-email-label" describedBy="show-email-hint" disabled={off} />
+      </SettingRow>
+      <SettingRow id="show-photo" label="Show my photo" hint="Otherwise colleagues see your initials. Your Admins and Coordinator always see it.">
+        <Switch checked={value("show_photo")} onChange={next => void toggle("show_photo", next)} labelledBy="show-photo-label" describedBy="show-photo-hint" disabled={off} />
+      </SettingRow>
+      {failure && <p className="field-error" role="alert">{failure}</p>}
+    </>
+  )
+}
+
+function PrivacySection({ settings, onChange }: { settings: Settings; onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void }) {
+  const { profile } = useMyProfile()
+  const hidden = profile ? !profile.is_public : false
+  return (
+    <>
+      <ProfileVisibility />
 
       <section className="dashboard-card settings-card" aria-labelledby="shown-heading">
         <div className="card-heading"><h2 id="shown-heading">What your profile shows</h2></div>
-        <SettingRow id="show-email" label="Show my email address" hint="Visitors can contact you directly.">
-          <Switch checked={settings.showEmail} onChange={value => onChange("showEmail", value)} labelledBy="show-email-label" describedBy="show-email-hint" disabled={hidden} />
-        </SettingRow>
-        <SettingRow id="show-photo" label="Show my photo" hint="Otherwise your initials are shown.">
-          <Switch checked={settings.showPhoto} onChange={value => onChange("showPhoto", value)} labelledBy="show-photo-label" describedBy="show-photo-hint" disabled={hidden} />
-        </SettingRow>
+        <ProfileShows hidden={hidden} />
         <SettingRow id="indexing" label="Let search engines find my profile" hint="Your profile can appear in Google and other search results.">
-          <Switch checked={settings.searchIndexing && settings.profileVisibility === "public"} onChange={value => onChange("searchIndexing", value)} labelledBy="indexing-label" describedBy="indexing-hint" disabled={settings.profileVisibility !== "public"} />
+          <Switch checked={settings.searchIndexing && !hidden} onChange={value => onChange("searchIndexing", value)} labelledBy="indexing-label" describedBy="indexing-hint" disabled={hidden} />
         </SettingRow>
         {hidden && (
           <InfoBanner title="Your profile is private">

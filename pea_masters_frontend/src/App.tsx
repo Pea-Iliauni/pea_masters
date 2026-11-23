@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type ComponentType } from "react"
-import { Navigate, Route, Routes } from "react-router"
+import { Navigate, Route, Routes, useLocation } from "react-router"
 import { RequireAuth } from "./components/RequireAuth"
 import { RequireStaff } from "./components/RequireStaff"
 import { LoginPage } from "./Pages/Login/LoginPage"
@@ -21,11 +21,18 @@ const EvaluationForm = page(() => import("./Pages/EvaluationForm/EvaluationForm"
 const SettingsPage = page(() => import("./Pages/Settings/SettingsPage"), "SettingsPage")
 const PeoplePage = page(() => import("./Pages/People/PeoplePage"), "PeoplePage")
 const ImportPeoplePage = page(() => import("./Pages/People/ImportPeoplePage"), "ImportPeoplePage")
+const PersonPage = page(() => import("./Pages/People/PersonPage"), "PersonPage")
 const EvaluationFormsPage = page(() => import("./Pages/EvaluationForms/EvaluationFormsPage"), "EvaluationFormsPage")
 const FormEditorPage = page(() => import("./Pages/EvaluationForms/FormEditorPage"), "FormEditorPage")
 const SendEvaluationsPage = page(() => import("./Pages/Evaluations/SendEvaluationsPage"), "SendEvaluationsPage")
 const ReviewEvaluationPage = page(() => import("./Pages/Evaluations/ReviewEvaluationPage"), "ReviewEvaluationPage")
 const PrivacyPage = page(() => import("./Pages/Privacy/PrivacyPage"), "PrivacyPage")
+
+/** People used to be under Administration; old links (and bookmarks) still work */
+function ToPeople() {
+  const { search } = useLocation()
+  return <Navigate to={`/people${search}`} replace />
+}
 
 /** Shown while a page's file loads: nothing at first, so a quick load doesn't flash a message */
 function PageLoading() {
@@ -66,9 +73,12 @@ function App() {
         <Route path="/cv-builder" element={<CvBuilderPage />} />
         <Route path="/evaluation-form" element={<EvaluationForm />} />
         <Route path="/settings/:sectionId?" element={<SettingsPage />} />
+        {/* Everyone: the people of their organization and their profiles */}
+        <Route path="/people" element={<PeoplePage />} />
+        <Route path="/people/:userId" element={<PersonPage />} />
+        <Route path="/admin/people" element={<ToPeople />} />
         {/* Administration: Admins and Coordinators only */}
         <Route element={<RequireStaff />}>
-        <Route path="/admin/people" element={<PeoplePage />} />
         <Route path="/admin/people/import" element={<ImportPeoplePage />} />
         <Route path="/admin/evaluations" element={<SendEvaluationsPage />} />
         <Route path="/admin/evaluations/:evaluationId" element={<ReviewEvaluationPage />} />

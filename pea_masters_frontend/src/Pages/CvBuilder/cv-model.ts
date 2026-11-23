@@ -6,7 +6,7 @@ import { api } from "@/lib/api"
  */
 
 export type Visibility = "private" | "public"
-export type Template = "classic" | "modern" | "compact"
+export type Template = "classic" | "modern" | "compact" | "sidebar" | "timeline" | "minimal" | "banner"
 export type CitationStyle = "APA" | "IEEE" | "Harvard"
 
 export type PublicationType = "Journal article" | "Conference paper" | "Book" | "Book chapter" | "Preprint" | "Thesis" | "Report"

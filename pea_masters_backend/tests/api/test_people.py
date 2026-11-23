@@ -34,14 +34,29 @@ def test_signed_out_requests_are_refused(client, base):
     assert client.get(f"{base}/people").status_code == 401
 
 
-def test_researcher_cannot_see_or_manage_people(signed_in, make_user, base, db):
+def test_researchers_see_the_directory_but_cannot_manage_people(as_admin, signed_in, make_user, base, db):
+    cs = add_department(as_admin, base, "Computer Science")
+    colleague = register(as_admin, base, "colleague@iliauni.edu.ge", department_id=cs, name="Col League").json()
+    gone = register(as_admin, base, "gone@iliauni.edu.ge", name="Gone Person").json()
+    as_admin.post(f"{base}/people/{gone['id']}/deactivate", json={"reason": None})
     researcher = make_user(email="member@iliauni.edu.ge", status="active")
     c = signed_in(researcher)
-    assert c.get(f"{base}/people").status_code == 403
+
+    listed = c.get(f"{base}/people")
+    assert listed.status_code == 200
+    body = listed.json()
+    assert (body["can_register"], body["can_manage_roles"], body["editable"]) == (False, False, [])
+    emails = {p["email"] for p in body["people"]}
+    assert "colleague@iliauni.edu.ge" in emails and "gone@iliauni.edu.ge" not in emails  # no deactivated people
+    assert all(p["last_login_at"] is None for p in body["people"])  # nor when anyone last signed in
+    assert c.get(f"{base}/people/{colleague['id']}").json()["department"]["id"] == cs
+    assert c.get(f"{base}/people/{gone['id']}").status_code == 404
+
     assert register(c, base, "x@iliauni.edu.ge").status_code == 403
-    denied = db.scalars(select(AuditLog).where(AuditLog.action == "authz.denied")).all()
-    assert [row.entity_id for row in denied] == ["people.view", "people.register"]
-    assert denied[0].actor_user_id == researcher.id
+    assert c.post(f"{base}/people/{colleague['id']}/deactivate").status_code == 403
+    assert c.patch(f"{base}/people/{colleague['id']}", json={"display_name": "X"}).status_code == 403
+    denied = db.scalars(select(AuditLog.entity_id).where(AuditLog.action == "authz.denied")).all()
+    assert denied == ["people.register", "people.deactivate", "people.edit"]
 
 
 def test_admin_of_another_organization_is_refused(signed_in, db, base):
@@ -159,64 +174,45 @@ def test_one_head_per_department(as_admin, base):
     assert "c1" in second.json()["detail"]["message"]
 
 
-def test_head_registers_researchers_into_their_own_department(head_of_cs, base):
+def test_coordinators_cannot_add_or_deactivate_people(head_of_cs, as_admin, base):
     c = head_of_cs["client"]
     listed = c.get(f"{base}/people").json()
-    assert listed["can_register"] is True and listed["can_manage_roles"] is False
-
-    # The department is filled in for them
-    created = register(c, base, "student.researcher@iliauni.edu.ge")
-    assert created.status_code == 201, created.text
-    assert created.json()["department"]["id"] == head_of_cs["cs"]
-    assert created.json()["roles"] == ["member"]
-
-    # ...but only Researchers, and only into their own department
-    assert error_code(register(c, base, "x@iliauni.edu.ge", department_id=head_of_cs["math"])) == "own_department_only"
-    assert error_code(register(c, base, "y@iliauni.edu.ge", roles=["admin"])) == "researchers_only"
-    assert error_code(register(c, base, "z@iliauni.edu.ge", roles=["coordinator", "member"],
-                               coordinates=head_of_cs["cs"])) == "researchers_only"
+    assert listed["can_register"] is False and listed["can_manage_roles"] is False
+    assert register(c, base, "student.researcher@iliauni.edu.ge").status_code == 403
+    researcher = register(as_admin, base, "cs.researcher@iliauni.edu.ge", department_id=head_of_cs["cs"]).json()
+    assert c.post(f"{base}/people/{researcher['id']}/deactivate").status_code == 403
+    as_admin.post(f"{base}/people/{researcher['id']}/deactivate", json={"reason": None})
+    assert c.post(f"{base}/people/{researcher['id']}/reactivate").status_code == 403
 
 
-def test_head_sees_only_their_departments_people(as_admin, head_of_cs, base):
-    register(as_admin, base, "cs.researcher@iliauni.edu.ge", department_id=head_of_cs["cs"])
+def test_coordinators_see_everyone_and_correct_only_their_researchers_names(as_admin, head_of_cs, base):
+    own = register(as_admin, base, "cs.researcher@iliauni.edu.ge", department_id=head_of_cs["cs"],
+                   name="Typo Nmae").json()
     mathematician = register(as_admin, base, "math.researcher@iliauni.edu.ge",
                              department_id=head_of_cs["math"]).json()
 
     c = head_of_cs["client"]
-    assert {p["email"] for p in c.get(f"{base}/people").json()["people"]} == \
-        {"head.cs@iliauni.edu.ge", "cs.researcher@iliauni.edu.ge"}
-    assert c.get(f"{base}/people/{mathematician['id']}").status_code == 403
+    listed = c.get(f"{base}/people").json()
+    assert {"cs.researcher@iliauni.edu.ge", "math.researcher@iliauni.edu.ge"} <= {p["email"] for p in listed["people"]}
+    assert listed["editable"] == [own["id"]]  # their own Researchers only
+    assert c.get(f"{base}/people/{mathematician['id']}").status_code == 200
+
+    renamed = c.patch(f"{base}/people/{own['id']}", json={"display_name": "Fixed Name"})
+    assert renamed.json()["display_name"] == "Fixed Name"
     assert c.patch(f"{base}/people/{mathematician['id']}", json={"display_name": "X"}).status_code == 403
-    assert c.post(f"{base}/people/{mathematician['id']}/deactivate").status_code == 403
+    assert error_code(c.patch(f"{base}/people/{own['id']}", json={"department_id": head_of_cs["math"]})) \
+        == "admins_move_people"
+    assert c.put(f"{base}/people/{own['id']}/roles", json={"roles": ["admin"]}).status_code == 403
 
     me = c.get("/api/v1/auth/me").json()
     assert [u["name"]["en"] for u in me["organizations"][0]["coordinates"]] == ["Computer Science"]
 
 
-def test_head_edits_deactivates_and_reactivates_their_researchers(head_of_cs, base):
-    c = head_of_cs["client"]
-    person = register(c, base, "r@iliauni.edu.ge", name="Typo Nmae").json()
-
-    renamed = c.patch(f"{base}/people/{person['id']}", json={"display_name": "Fixed Name"})
-    assert renamed.json()["display_name"] == "Fixed Name"
-    moved = c.patch(f"{base}/people/{person['id']}", json={"department_id": head_of_cs["math"]})
-    assert error_code(moved) == "admins_move_people"
-    assert c.put(f"{base}/people/{person['id']}/roles", json={"roles": ["admin"]}).status_code == 403
-
-    assert c.post(f"{base}/people/{person['id']}/deactivate").json()["status"] == "deactivated"
-    # Deactivated Researchers stay in the head's list, so they can be reactivated
-    listed = {p["email"]: p["status"] for p in c.get(f"{base}/people").json()["people"]}
-    assert listed["r@iliauni.edu.ge"] == "deactivated"
-    assert c.post(f"{base}/people/{person['id']}/reactivate").json()["status"] == "invited"
-
-
-def test_head_cannot_act_on_admins_or_other_heads(as_admin, admin, head_of_cs, base, db):
-    # An Admin who works in Computer Science is visible to the head, but not theirs to manage
+def test_coordinators_cannot_rename_admins_or_other_coordinators(as_admin, admin, head_of_cs, base):
     as_admin.patch(f"{base}/people/{admin.id}", json={"department_id": head_of_cs["cs"]})
     c = head_of_cs["client"]
-    assert error_code(c.post(f"{base}/people/{admin.id}/deactivate")) == "researchers_only"
     assert error_code(c.patch(f"{base}/people/{admin.id}", json={"display_name": "X"})) == "researchers_only"
-    assert error_code(c.post(f"{base}/people/{head_of_cs['id']}/deactivate")) == "cannot_deactivate_self"
+    assert str(admin.id) not in c.get(f"{base}/people").json()["editable"]
 
 
 def test_moving_someone_keeps_department_history(as_admin, base, db):

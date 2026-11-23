@@ -1,8 +1,8 @@
 """People in an organization.
 
-Admins register anyone, set roles and departments, and deactivate people. Coordinators
-register Researchers into their own department, correct their names, and deactivate or reactivate them; they
-can't grant roles, move people between departments, or act on other Coordinators and Admins.
+Everyone in the organization sees the People page: a directory of the active people, with their departments and
+roles. Admins also see deactivated people, statuses and sign-ins, and only they register, deactivate and reactivate
+people, set roles and move people between departments. Coordinators correct the names of their own Researchers.
 "Member" in the database is shown as "Researcher" in the app."""
 
 import uuid
@@ -34,6 +34,7 @@ from app.models import (
     OrganizationMembership,
     OrganizationUnit,
     Position,
+    Profile,
     RoleAssignment,
     User,
     UserSession,
@@ -66,8 +67,9 @@ class PersonOut(BaseModel):
 
 class PeopleList(BaseModel):
     people: list[PersonOut]
-    can_register: bool  # Admins, and Coordinators for their own department
+    can_register: bool  # Admins: register, deactivate and reactivate people
     can_manage_roles: bool  # Admins: roles, moving people between departments, structure
+    editable: list[uuid.UUID]  # whose name this person may correct: everyone for Admins, a Coordinator's Researchers
 
 
 class PersonCreate(BaseModel):
@@ -185,21 +187,53 @@ def membership_of(db: Session, org_id: uuid.UUID, user_id: uuid.UUID) -> Organiz
     return membership
 
 
+def manages_people(actor: Actor, org_id: uuid.UUID) -> bool:
+    return actor.is_root or "admin" in actor.roles_in(org_id)
+
+
+def as_directory(db: Session, people: list[PersonOut]) -> list[PersonOut]:
+    """What everyone may see: active and invited people, without when they last signed in, and without the email
+    address of those who hide it (Settings → Privacy)."""
+    hidden = set(db.scalars(select(Profile.user_id).where(
+        Profile.user_id.in_([p.id for p in people]), Profile.show_email.is_(False)))) if people else set()
+    return [p.model_copy(update={"last_login_at": None, **({"email": ""} if p.id in hidden else {})})
+            for p in people if p.status != "deactivated"]
+
+
+def editable_by(db: Session, org_id: uuid.UUID, actor: Actor, people: list[PersonOut]) -> list[uuid.UUID]:
+    if manages_people(actor, org_id):
+        return [p.id for p in people]
+    if "coordinator" not in actor.roles_in(org_id):
+        return []
+    mine = set(db.scalars(coordinated_members(actor.user.id, org_id)))
+    return [p.id for p in people if p.id in mine and set(p.roles) <= {"member"}]
+
+
 @router.get("", response_model=PeopleList)
 def list_people(org_id: uuid.UUID, q: str | None = None,
                 actor: Actor = Depends(get_actor), db: Session = Depends(get_db)):
+    """The People page: everyone in the organization sees its active people; Admins see everyone, with details."""
     get_organization(db, org_id)
-    role = authorize(db, actor, Action.VIEW_PEOPLE, org_id)
-    coordinator_only = role == "coordinator"
-    people = load_people(db, org_id, search=q, visible_to_coordinator=actor.user.id if coordinator_only else None)
-    return PeopleList(people=people, can_register=True, can_manage_roles=role in ("admin", "root"))
+    authorize(db, actor, Action.VIEW_DIRECTORY, org_id)
+    admin = manages_people(actor, org_id)
+    people = load_people(db, org_id, search=q)
+    if not admin:
+        people = as_directory(db, people)
+    return PeopleList(people=people, can_register=admin, can_manage_roles=admin,
+                      editable=editable_by(db, org_id, actor, people))
 
 
 @router.get("/{user_id}", response_model=PersonOut)
 def get_person(org_id: uuid.UUID, user_id: uuid.UUID, actor: Actor = Depends(get_actor), db: Session = Depends(get_db)):
     get_organization(db, org_id)
-    authorize(db, actor, Action.VIEW_PEOPLE, org_id, target_user_id=user_id)
-    return one_person(db, org_id, user_id)
+    authorize(db, actor, Action.VIEW_DIRECTORY, org_id)
+    person = one_person(db, org_id, user_id)
+    if manages_people(actor, org_id):
+        return person
+    found = as_directory(db, [person])
+    if not found:
+        raise problem(status.HTTP_404_NOT_FOUND, "not_found", "This person isn't part of the organization.")
+    return found[0]
 
 
 # --- rules shared by the changes below ----------------------------------------------------------
@@ -498,16 +532,22 @@ def deactivate_by_email(db: Session, org_id: uuid.UUID, email: str, actor: Actor
     deactivate_member(db, org_id, user_id, actor, role, reason, audited=audited)
 
 
+def body_deactivates(body: ImportIn) -> bool:
+    return any(row.action == "deactivate" for row in body.rows)
+
+
 @router.post("/import", response_model=ImportOut)
 def import_people(org_id: uuid.UUID, body: ImportIn,
                   actor: Actor = Depends(get_actor), db: Session = Depends(get_db)):
     """Registers and deactivates up to 1000 people from a list the browser has read from a spreadsheet or the page
-    (the file itself never reaches the server). Admins act on anyone; Coordinators register Researchers into their
-    own department and deactivate their own Researchers, the same rules as the single-person buttons, which this
-    reuses. Each row runs in its own savepoint, so one bad row is reported without hiding the others. Saved only when
-    asked to and every row is fine: all or nothing. People already registered are reported, never changed."""
+    (the file itself never reaches the server). Admins only. Every row goes through the same rules as registering or
+    deactivating one person, which this reuses. Each row runs in its own savepoint, so one bad row is reported
+    without hiding the others. Saved only when asked to and every row is fine: all or nothing. People already
+    registered are reported, never changed."""
     get_organization(db, org_id)
-    role = authorize(db, actor, Action.REGISTER_PEOPLE, org_id)
+    role = authorize(db, actor, Action.REGISTER_PEOPLE, org_id)  # Admins
+    if body_deactivates(body):
+        authorize(db, actor, Action.DEACTIVATE_PEOPLE, org_id)
 
     results: list[ImportResult] = []
     seen: set[str] = set()
@@ -633,7 +673,7 @@ def deactivate_member(db: Session, org_id: uuid.UUID, user_id: uuid.UUID, actor:
 def deactivate_person(org_id: uuid.UUID, user_id: uuid.UUID, body: Reason | None = None,
                       actor: Actor = Depends(get_actor), db: Session = Depends(get_db)):
     get_organization(db, org_id)
-    role = authorize(db, actor, Action.EDIT_PEOPLE, org_id, target_user_id=user_id)
+    role = authorize(db, actor, Action.DEACTIVATE_PEOPLE, org_id)
     deactivate_member(db, org_id, user_id, actor, role, body.reason if body else None)
     commit_or_conflict(db)
     return one_person(db, org_id, user_id)
@@ -643,10 +683,8 @@ def deactivate_person(org_id: uuid.UUID, user_id: uuid.UUID, body: Reason | None
 def reactivate_person(org_id: uuid.UUID, user_id: uuid.UUID, body: Reason | None = None,
                       actor: Actor = Depends(get_actor), db: Session = Depends(get_db)):
     get_organization(db, org_id)
-    role = authorize(db, actor, Action.EDIT_PEOPLE, org_id, target_user_id=user_id)
+    role = authorize(db, actor, Action.DEACTIVATE_PEOPLE, org_id)
     membership = membership_of(db, org_id, user_id)
-    if role == "coordinator":
-        coordinator_may_act_on(db, org_id, user_id)
     if membership.status == "active":
         raise problem(status.HTTP_409_CONFLICT, "already_active", "This person is already active.")
     before = snapshot(db, org_id, user_id)

@@ -1,7 +1,6 @@
 """Adding and deactivating several people at once: the Admin downloads the template (with dropdown lists), fills the
 list from a file, fixes the rows the page and the server point out, and saves everything at once. The file is read in
-the browser; a formula in it is never run, and text that looks like a formula is refused. A Coordinator does the same
-for Researchers in their own department."""
+the browser; a formula in it is never run, and text that looks like a formula is refused. Only Admins add people."""
 
 import re
 import zipfile
@@ -69,11 +68,11 @@ def test_admin_registers_and_deactivates_a_list_from_excel(admin_page: Page, org
                         ("leaving.soon@iliauni.edu.ge", "Leaving Soon")):
         api(page, "POST", f"/orgs/{org}/people", {"email": email, "display_name": name, "roles": ["member"]})
 
-    # 1. From People, "Add several" opens the list page
-    page.goto("/admin/people")
-    page.get_by_role("button", name="Add several").click()
+    # 1. From People, "Add people" opens the list page
+    page.goto("/people")
+    page.get_by_role("button", name="Add people").click()
     expect(page).to_have_url(re.compile("/admin/people/import"))
-    expect(page.get_by_role("heading", name="Add several people", level=1)).to_be_visible()
+    expect(page.get_by_role("heading", name="Add people", level=1)).to_be_visible()
 
     # 2. The template is made in the browser: the columns (name marked optional), how to fill them in, the structure,
     #    and dropdown lists: faculties and departments that exist, the roles an Admin may give, and X to deactivate
@@ -138,7 +137,9 @@ def test_admin_registers_and_deactivates_a_list_from_excel(admin_page: Page, org
     # "yes" isn't X: ticking clears it (deactivate), unticking registers them after all
     page.get_by_label("Deactivate, Excel row 11").click()
     page.get_by_label("Deactivate, Excel row 11").click()
-    expect(page.get_by_text("No rows need fixing.")).to_be_visible()
+    # Fixed rows stay on screen, marked as fixed, until the filter is turned off
+    expect(page.get_by_label("Name (optional), Excel row 6")).to_be_visible()
+    expect(page.get_by_text("All fixed. Untick the filter to see the whole list.")).to_be_visible()
 
     # 5. The server checks too: the gmail address isn't the university's. Nothing is saved yet.
     page.get_by_label("Show only rows that need fixing").click()
@@ -159,7 +160,7 @@ def test_admin_registers_and_deactivates_a_list_from_excel(admin_page: Page, org
     shot(page, "import-3-done")
 
     page.get_by_role("button", name="Back to People").click()
-    expect(page).to_have_url(re.compile("/admin/people$"))
+    expect(page).to_have_url(re.compile("/people$"))
     people = page.locator("tbody tr")
     expect(people.filter(has_text="nino.beridze@iliauni.edu.ge")).to_contain_text("Nino Beridze")  # from the email
     expect(people.filter(has_text="nino.beridze@iliauni.edu.ge")).to_contain_text(DEPARTMENT)
@@ -193,53 +194,6 @@ def test_deactivating_on_the_page(admin_page: Page, organization):
     page.get_by_role("button", name="Deactivate 1 person").click()
     page.get_by_role("alertdialog").get_by_role("button", name="Deactivate").click()
     expect(page.get_by_role("heading", name="1 person was deactivated")).to_be_visible()
-
-
-def test_a_coordinator_adds_and_deactivates_their_own_researchers(admin_page: Page, google_sign_in, organization,
-                                                                   shot, tmp_path):
-    org = organization["org_id"]
-    faculty = api(admin_page, "POST", f"/orgs/{org}/units", {"kind": "faculty", "name_en": "Faculty of Coordination"})
-    own = api(admin_page, "POST", f"/orgs/{org}/units", {"kind": "department", "name_en": "Own Department",
-                                                          "parent_id": faculty["id"]})
-    api(admin_page, "POST", f"/orgs/{org}/units", {"kind": "department", "name_en": "Other Department",
-                                                    "parent_id": faculty["id"]})
-    api(admin_page, "POST", f"/orgs/{org}/people", {"email": "coord.inator@iliauni.edu.ge",
-                                                    "display_name": "Coord Inator",
-                                                    "roles": ["coordinator", "member"], "department_id": own["id"],
-                                                    "coordinates_unit_id": own["id"]})
-    api(admin_page, "POST", f"/orgs/{org}/people", {"email": "own.researcher@iliauni.edu.ge", "roles": ["member"],
-                                                    "display_name": "Own Researcher", "department_id": own["id"]})
-    page = google_sign_in("coord.inator@iliauni.edu.ge", "Coord Inator")
-
-    page.goto("/admin/people")
-    page.get_by_role("button", name="Add several").click()
-    expect(page.get_by_text("Register Researchers in your department")).to_be_visible()
-    # Coordinators register Researchers only: no role choice, and their department is filled in
-    expect(page.get_by_role("columnheader", name="Role", exact=True)).to_be_visible()
-    expect(page.get_by_label("Roles, line 1")).to_have_count(0)
-    department = page.get_by_label("Department, line 1")
-    expect(department).to_have_value(own["id"])
-    expect(department.locator("option", has_text="Other Department")).to_have_count(0)
-
-    # Their template offers only their department and the Researcher role
-    people_sheet = template_xml(page, tmp_path)["xl/worksheets/sheet1.xml"]
-    lists = people_sheet.split("<dataValidations")[1]
-    assert "&quot;Researcher&quot;</formula1>" in lists and "Admin" not in lists
-
-    page.get_by_label("Email, line 1").fill("new.researcher@iliauni.edu.ge")
-    page.get_by_role("button", name="Add row").click()
-    page.get_by_label("Email, line 2").fill("own.researcher@iliauni.edu.ge")
-    page.get_by_label("Deactivate, line 2").check()
-    page.get_by_role("button", name="Add row").click()
-    page.get_by_label("Email, line 3").fill("e2e.admin@iliauni.edu.ge")
-    page.get_by_label("Deactivate, line 3").check()
-    expect(page.get_by_text("Nobody with this email is registered in your department.")).to_be_visible()
-    shot(page, "import-4-coordinator")
-    page.get_by_role("button", name="Remove line 3").click()
-
-    page.get_by_role("button", name="Register 1 and deactivate 1").click()
-    page.get_by_role("alertdialog").get_by_role("button", name="Save").click()
-    expect(page.get_by_role("heading", name="1 person was registered, 1 person was deactivated")).to_be_visible()
 
 
 def test_leaving_with_an_unsaved_list_asks_first(admin_page: Page):

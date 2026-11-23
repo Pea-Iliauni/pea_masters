@@ -9,6 +9,10 @@ const TEMPLATES: { value: Template; label: string; description: string }[] = [
   { value: "classic", label: "Classic", description: "Serif headings, centred header. The traditional academic look." },
   { value: "modern", label: "Modern", description: "Clean sans-serif with ISU red accents." },
   { value: "compact", label: "Compact", description: "Smaller type and spacing for long publication lists." },
+  { value: "sidebar", label: "Sidebar", description: "Name, contact and research profiles in a column beside the sections." },
+  { value: "timeline", label: "Timeline", description: "Section titles in a margin on the left; entries line up beside them." },
+  { value: "minimal", label: "Minimal", description: "Light type, no lines, plenty of white space." },
+  { value: "banner", label: "Banner", description: "A dark band across the top with your name in white." },
 ]
 
 type Props = {
