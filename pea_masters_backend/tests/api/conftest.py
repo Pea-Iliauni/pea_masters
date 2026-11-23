@@ -36,7 +36,7 @@ TABLES = ", ".join([  # emptied before every test; child tables first
     "cvs", "profile_entry_files", "profile_entries", "external_lookups",
     "wos_author_searches", "wos_lookups", "audit_log", "profiles", "files", "coordinator_assignments",
     "affiliations", "positions", "organization_units", "unit_types", "role_assignments", "organization_memberships",
-    "sessions", "password_credentials", "auth_identities", "identity_providers", "organization_domains",
+    "sessions", "auth_identities", "organization_domains",
     "organizations", "users",
 ])
 

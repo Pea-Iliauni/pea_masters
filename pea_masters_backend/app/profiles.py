@@ -295,7 +295,7 @@ async def upload_my_photo(photo: UploadFile, request: Request, user: User = Depe
     key, digest = storage.save(jpeg, f"photos/{user.id}", "jpg")
     file = File(organization_id=first_organization(db, user.id), owner_user_id=user.id, storage_key=key,
                 original_name=(photo.filename or "photo")[:200], mime_type="image/jpeg", size_bytes=len(jpeg),
-                sha256=digest, scan_status="clean")  # re-encoded by us above, so it holds nothing but pixels
+                sha256=digest)  # re-encoded by us above, so it holds nothing but pixels
     db.add(file)
     db.flush()
     profile = profile_of(db, user.id)

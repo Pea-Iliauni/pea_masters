@@ -102,7 +102,6 @@ class Me(BaseModel):
     display_name: str
     given_name: str | None
     family_name: str | None
-    preferred_locale: str
     is_root: bool
     organizations: list[OrganizationAccess]
 
@@ -131,7 +130,6 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)) -> Me:
     return Me(
         id=user.id, email=user.email, display_name=user.display_name,
         given_name=user.given_name, family_name=user.family_name,
-        preferred_locale=user.preferred_locale,
         is_root=any(role == "root" for _, role in roles),
         organizations=[
             OrganizationAccess(
