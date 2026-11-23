@@ -2,33 +2,61 @@
 # updates as soon as an advisory is published. Pull requests target backup_test_branch, like everyone else's; small
 # updates are grouped into one pull request per kind so they don't pile up.
 # Security alerts and security updates are switched on in the repository's Settings → Code security.
+#
+# Major upgrades (a new PostgreSQL, Python, TypeScript, … version) are left out on purpose: they're projects that
+# need planning and testing, not weekly updates. PostgreSQL in particular can't open the existing database files after
+# a major upgrade: that needs a dump and restore by hand. Security fixes within a version still come through.
+#
+# cooldown: a new release is only proposed once it's 14 days old, so a compromised or broken release is usually
+# caught and pulled before it reaches PEA. (Security updates don't wait.)
 version: 2
 updates:
   - package-ecosystem: uv
     directory: /pea_masters_backend
     target-branch: backup_test_branch
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 14 }
     groups:
       python-minor-and-patch: { update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: bun
     directory: /pea_masters_frontend
     target-branch: backup_test_branch
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 14 }
     groups:
       frontend-minor-and-patch: { update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: docker
     directories: [/pea_masters_backend, /deploy]
     target-branch: backup_test_branch
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 14 }
+    ignore:
+      # python:3.13 → 3.14 counts as "minor" to Dependabot, but it's a new Python: upgrade on purpose
+      - dependency-name: python
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: docker-compose
     directory: /deploy
     target-branch: backup_test_branch
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 14 }
+    ignore:
+      # A new PostgreSQL major version can't read the database files: upgrading needs a dump and restore by hand
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
     target-branch: backup_test_branch
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 14 }

@@ -10,7 +10,7 @@ import json
 import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, unquote, urlencode, urlparse
 
 KEY = "e2e-key"
 
@@ -89,7 +89,7 @@ class Handler(BaseHTTPRequestHandler):
             requests.append("orcid:works")
             return self.reply(200, ORCID_WORKS)
         if url.path.startswith("/crossref/works/"):
-            doi = url.path.removeprefix("/crossref/works/")
+            doi = unquote(url.path.removeprefix("/crossref/works/"))  # PEA sends the DOI encoded
             requests.append(f"crossref:{doi}")
             return self.reply(200, {"message": WORKS[doi]}) if doi in WORKS else self.reply(404, {"message": "no"})
         if url.path not in ("/v1/documents", "/v1/journals"):

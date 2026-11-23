@@ -103,3 +103,23 @@ def test_journals_in_web_of_science_are_recognised_by_issn(researcher, services)
 
 def test_journal_input_is_checked(researcher, services):
     assert error_code(researcher.get(JOURNAL, params={"issn": "28-0836"})) == "invalid_issn"
+
+
+def test_the_doi_is_one_encoded_path_segment(monkeypatch):
+    """Characters a DOI may contain can't point the request at another of Crossref's addresses"""
+    from app import crossref
+
+    asked: list[str] = []
+
+    class Answer:
+        status_code = 404
+
+    def fake_get(url, **_):
+        asked.append(url)
+        return Answer()
+
+    monkeypatch.setattr(crossref.httpx, "get", fake_get)
+    for doi in ("10.1038/nature14539", "10.1234/../../members?rows=1000#x"):
+        assert crossref.fetch_work(doi) is None
+    assert asked == [f"{crossref.settings.crossref_url}/works/10.1038%2Fnature14539",
+                     f"{crossref.settings.crossref_url}/works/10.1234%2F..%2F..%2Fmembers%3Frows%3D1000%23x"]

@@ -171,3 +171,6 @@ Logs are capped at 50 MB per container. The containers start again on their own 
   few minutes. The counts are kept per API worker, so the real ceiling is about twice the number in the rules.
 - Dependabot (`.github/dependabot.yml`) proposes library updates every Monday, and CI checks the libraries for known
   vulnerabilities on every pull request.
+- Requests to the API are refused above **25 MB** (`deploy/Caddyfile`, answered with 413 before anything reaches the
+  API). The largest real request is a biography with images (about 12 MB). If an upload limit in the app is raised
+  past that, raise this one too.
