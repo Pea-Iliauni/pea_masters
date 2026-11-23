@@ -32,10 +32,12 @@ uv run python -m scripts.seed --email classmate@iliauni.edu.ge --name "Name Surn
 
 ## Managing people
 
-After the first Admin exists, everything else happens in the app: **Administration → People**
-(http://localhost:5173/admin/people). Admins add departments, register people, set roles and deactivate accounts.
-The structure is organization → faculties → departments (Structure tab). Each department has at most one head
-(Coordinator), who registers, renames, deactivates and reactivates the Researchers of that department.
+After the first Admin exists, everything else happens in the app: **People** (http://localhost:5173/people).
+Admins add departments, add people (**Add people**: typed in or from an Excel file, `app/people.py`
+`POST /people/import`), set roles and deactivate accounts. The structure is organization → faculties → departments
+(Structure tab). Each department has at most one Coordinator, who sends and reviews its Researchers' evaluations and
+corrects their names. Everyone in the organization can open the People page and colleagues' profiles
+(`app/person_pages.py`); private profiles show only name and department, except to the person's reviewers.
 
 Names (`app/names.py`): registering guesses the name from `name.surname.N@` addresses; each sign-in applies the
 official name from Google, unless someone corrected it by hand (`users.name_source` = `manual`).
@@ -43,7 +45,7 @@ official name from Google, unless someone corrected it by hand (`users.name_sour
 Profiles (`app/profiles.py`): each person edits their biography (English and Georgian, cleaned of anything unsafe by
 `app/richtext.py`) and photo in the General information part of **My profile**. Photos are checked, cropped to 512×512 and
 saved as JPEG in the `storage/` folder (`STORAGE_DIR`, ignored by git); the database keeps only their details.
-Each affiliation in `GET /api/v1/me/profile` also names the person's `coordinator` (their head of department, or a
+Each affiliation in `GET /api/v1/me/profile` also names the person's `coordinator` (their department's Coordinator, or a
 Coordinator assigned to them personally), whom the evaluation form's "Contact coordinator" writes to by email.
 
 Web of Science (`app/wos.py`): `GET /api/v1/wos/lookup?doi=…` checks an article in Web of Science Core Collection
@@ -80,7 +82,7 @@ personal to whoever registers them and can't be transferred.
 Profile sections (`app/profile_entries.py`): qualification entries (education, employment, languages, awards, video
 lectures, ...) are stored in `profile_entries`, with supporting documents (PDF, JPG or PNG up to 10 MB, recognised by
 their content) attached through `profile_entry_files`. The profile and the CV are the person's own and aren't
-reviewed: a saved entry is on the profile straight away. Only the evaluation form is reviewed by the head of department.
+reviewed: a saved entry is on the profile straight away. Only the evaluation form is reviewed, by the department's Coordinator.
 Documents (`files.purpose = 'document'`) can be opened only by their owner, Admins of their organization and their head
 of department; photos stay visible inside the organization. Research and
 Teaching interests are kept in `profiles.research` and `profiles.teaching`. Programmes and supervised students will come
