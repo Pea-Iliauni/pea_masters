@@ -23,7 +23,6 @@ export type Session = {
   email: string
   givenName: string | null
   familyName: string | null
-  locale: string
   isRoot: boolean
   organizations: OrganizationAccess[]
 }
@@ -40,7 +39,6 @@ type MeResponse = {
   display_name: string
   given_name: string | null
   family_name: string | null
-  preferred_locale: string
   is_root: boolean
   organizations: OrganizationAccess[]
 }
@@ -68,7 +66,7 @@ export function refreshSession(): Promise<void> {
           status: "signed-in",
           session: {
             id: me.id, name: me.display_name, email: me.email, givenName: me.given_name, familyName: me.family_name,
-            locale: me.preferred_locale, isRoot: me.is_root, organizations: me.organizations,
+            isRoot: me.is_root, organizations: me.organizations,
           },
         })
       } else {

@@ -50,7 +50,6 @@ class OrganizationDomain(Timestamps, Base):
     organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
     domain: Mapped[str] = mapped_column(Text)
     verified_at: Mapped[datetime | None]
-    verified_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     allow_self_signup: Mapped[bool] = mapped_column(server_default="false")
 
 
@@ -62,7 +61,6 @@ class User(Timestamps, Base):
     name_source: Mapped[str] = mapped_column(Text, server_default="registration")  # registration | google | manual
     given_name: Mapped[str | None] = mapped_column(Text)
     family_name: Mapped[str | None] = mapped_column(Text)
-    preferred_locale: Mapped[str] = mapped_column(Text, server_default="ka")
     status: Mapped[str] = mapped_column(AccountStatus, server_default="active")
     last_login_at: Mapped[datetime | None]
     deleted_at: Mapped[datetime | None]
@@ -99,7 +97,6 @@ class OrganizationMembership(Timestamps, Base):
     organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
     status: Mapped[str] = mapped_column(MembershipStatus, server_default="active")
     employee_number: Mapped[str | None] = mapped_column(Text)
-    joined_on: Mapped[date | None]
     left_on: Mapped[date | None]
 
 
@@ -132,7 +129,6 @@ class OrganizationUnit(Timestamps, Base):
     parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("organization_units.id"))
     unit_type_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("unit_types.id"))
     name: Mapped[dict[str, str]] = mapped_column(JSONB)  # {"ka": ..., "en": ...}
-    code: Mapped[str | None] = mapped_column(Text)
     archived_at: Mapped[datetime | None]
     deleted_at: Mapped[datetime | None]
 
@@ -156,11 +152,9 @@ class Position(Timestamps, Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=func.gen_random_uuid())
     organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
     name: Mapped[dict[str, str]] = mapped_column(JSONB)  # {"ka": ..., "en": ...}
-    category: Mapped[str | None] = mapped_column(Text)
     archived_at: Mapped[datetime | None]
 
 
-ScanStatus = pg_enum("scan_status", "pending", "clean", "infected", "failed")
 
 
 class File(Base):
@@ -174,7 +168,6 @@ class File(Base):
     mime_type: Mapped[str] = mapped_column(Text)  # detected from the content, not trusted from the browser
     size_bytes: Mapped[int] = mapped_column(BigInteger)
     sha256: Mapped[str] = mapped_column(Text)
-    scan_status: Mapped[str] = mapped_column(ScanStatus, server_default="pending")
     uploaded_at: Mapped[datetime] = mapped_column(server_default=func.now())
     deleted_at: Mapped[datetime | None]
     deleted_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
