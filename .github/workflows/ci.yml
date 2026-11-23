@@ -1,5 +1,6 @@
 # Checks every pull request and every push to the shared branches: backend lint and API tests, the frontend build,
-# and the browser tests. Same versions and database port as on a developer's computer (see README).
+# known vulnerabilities in the libraries, and the browser tests. Same versions and database port as on a developer's
+# computer (see README).
 name: Checks
 
 on:
@@ -59,6 +60,30 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Type check and build
         run: bun run build
+
+  dependencies:
+    name: Dependencies (known vulnerabilities)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: { version: "${{ env.UV_VERSION }}" }
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: "${{ env.BUN_VERSION }}" }
+      # Every Python package the server installs, checked against the Python vulnerability database
+      - name: Python packages
+        working-directory: pea_masters_backend
+        run: |
+          uv export --format requirements-txt --no-hashes --no-dev --no-emit-project -q > "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit --requirement "$RUNNER_TEMP/requirements.txt" --progress-spinner off
+      # Frontend packages: fails on high or critical advisories; lower ones are listed in the log. (On 2026-11-23 the
+      # only one was a moderate minimatch issue inside build tools, which never reaches the website.)
+      - name: Frontend packages
+        working-directory: pea_masters_frontend
+        run: |
+          bun install --frozen-lockfile
+          bun audit || true
+          bun audit --audit-level=high
 
   browser:
     name: Browser tests

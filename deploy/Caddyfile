@@ -8,6 +8,10 @@
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
+		# Other sites' windows can't reach into PEA's (sign-in is a full-page redirect, not a pop-up)
+		Cross-Origin-Opener-Policy same-origin
+		# Browser features PEA never uses stay off, also for anything that might be injected
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=()"
 		-Server
 	}
 
@@ -19,6 +23,11 @@
 	# The app. Files in /assets have a hash in their name, so browsers may keep them; index.html is checked each time,
 	# so a new version reaches everyone on their next visit. Any other path is a page of the app: send index.html.
 	handle {
+		# Content Security Policy: the browser only runs PEA's own scripts and styles, so injected HTML can't run code.
+		# connect-src: the DOI lookup asks Crossref and DataCite from the browser. frame-src: video lectures
+		# (src/lib/video.ts). media-src: direct links to video files. Keep on one line: the end-to-end test
+		# (tests/e2e/test_security_headers.py) reads it from here and checks every page against it.
+		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.crossref.org https://api.datacite.org; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://drive.google.com https://www.dailymotion.com https://embed.ted.com; media-src 'self' https:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
 		root * /srv
 		@assets path /assets/*
 		header @assets Cache-Control "public, max-age=31536000, immutable"
