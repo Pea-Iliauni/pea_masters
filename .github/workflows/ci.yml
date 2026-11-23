@@ -34,7 +34,7 @@ jobs:
       run:
         working-directory: pea_masters_backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
         with: { version: "${{ env.UV_VERSION }}", enable-cache: true }
       - name: Install Python and packages
@@ -53,7 +53,7 @@ jobs:
       run:
         working-directory: pea_masters_frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: "${{ env.BUN_VERSION }}" }
       - name: Install packages
@@ -65,7 +65,7 @@ jobs:
     name: Dependencies (known vulnerabilities)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
         with: { version: "${{ env.UV_VERSION }}" }
       - uses: oven-sh/setup-bun@v2
@@ -96,7 +96,7 @@ jobs:
         ports: ["5434:5432"]
         options: --health-cmd "pg_isready -U pea -d pea" --health-interval 2s --health-timeout 3s --health-retries 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
         with: { version: "${{ env.UV_VERSION }}", enable-cache: true }
       - uses: oven-sh/setup-bun@v2
