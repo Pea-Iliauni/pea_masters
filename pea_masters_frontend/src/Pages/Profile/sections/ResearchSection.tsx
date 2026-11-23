@@ -1,0 +1,260 @@
+import { useEffect, useRef, useState } from "react"
+import { Check, Pencil, Plus, Save, Trash2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { KeywordInput } from "@/components/forms/KeywordInput"
+import { InlineRecordForm } from "@/components/forms/InlineRecordForm"
+import type { FieldDef } from "@/components/forms/field-types"
+import "@/components/forms/forms.css"
+import { useStore } from "@/lib/store"
+import { retryProfileData, saveResearch, savedResearch, useProfileData } from "../profile-data"
+import { SectionLoading } from "./SectionLoading"
+import { ApiError } from "@/lib/api"
+import { PROJECT_ROLES, PROJECT_TYPES, type Collaboration, type Project, type ResearchOverview } from "../research/research-model"
+import "../research/ResearchPage.css"
+
+const currentYear = new Date().getFullYear()
+const YEARS = Array.from({ length: currentYear + 6 - 1990 }, (_, i) => String(currentYear + 5 - i))
+
+const projectFields: FieldDef[] = [
+  { name: "title", label: "Project title", type: "text", required: true },
+  { name: "donor", label: "Donor / funder", type: "text", required: true, span: 2, placeholder: "e.g. Horizon Europe, GNSF" },
+  { name: "type", label: "Type", type: "select", required: true, span: 2, options: PROJECT_TYPES },
+  { name: "startYear", label: "Start year", type: "select", required: true, span: 2, options: YEARS },
+  { name: "endYear", label: "End year", type: "select", span: 2, options: YEARS, hint: "Leave empty if ongoing." },
+  { name: "role", label: "Your role", type: "select", required: true, span: 2, options: PROJECT_ROLES },
+]
+
+const collaborationFields: FieldDef[] = [
+  { name: "name", label: "Researcher", type: "text", required: true, span: 2, placeholder: "e.g. Dr. K. Schulz" },
+  { name: "institution", label: "Institution", type: "text", required: true, span: 2 },
+  { name: "topic", label: "Topic", type: "text", required: true },
+]
+
+/** "Dr. K. Schulz" → "KS", "David Mchedlidze" → "DM" */
+function initials(name: string) {
+  const words = name.split(/\s+/).filter(word => word && !/^(dr|prof|mr|ms|mrs)\.?$/i.test(word))
+  if (!words.length) return "?"
+  return ((words[0][0] ?? "") + (words.length > 1 ? words[words.length - 1][0] : "")).toUpperCase()
+}
+
+const period = (project: Project) => `${project.startYear} - ${project.endYear || "present"}`
+const sameData = (a: ResearchOverview, b: ResearchOverview) => JSON.stringify(a) === JSON.stringify(b)
+
+type Editor =
+  | { kind: "project"; id: string | null; session: number }
+  | { kind: "collaboration"; id: string | null; session: number }
+
+/** Research: interests, projects, collaborators and collaborating organisations. */
+export function ResearchSection() {
+  const status = useProfileData()
+  if (status !== "ready") return <SectionLoading id="research" title="Research" status={status} onRetry={retryProfileData} />
+  return <ResearchEditor />
+}
+
+function ResearchEditor() {
+  const saved = useStore(savedResearch)
+  const [data, setData] = useState<ResearchOverview>(saved)
+  const [editor, setEditor] = useState<Editor | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const session = useRef(0)
+  const timer = useRef<number | undefined>(undefined)
+
+  const dirty = !sameData(data, saved)
+
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+
+  // Warn before closing the tab with unsaved changes
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault()
+    window.addEventListener("beforeunload", warn)
+    return () => window.removeEventListener("beforeunload", warn)
+  }, [dirty])
+
+  const change = (update: (current: ResearchOverview) => ResearchOverview) => {
+    setData(update)
+    setNotice(false)
+  }
+
+  const openEditor = (next: Omit<Editor, "session">) => {
+    session.current += 1
+    setEditor({ ...next, session: session.current } as Editor)
+  }
+
+  const save = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      setData(await saveResearch(data))
+      setNotice(true)
+      window.clearTimeout(timer.current)
+      timer.current = window.setTimeout(() => setNotice(false), 4000)
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : "Your research couldn't be saved. Try again.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const editingCollaboration = editor?.kind === "collaboration" && editor.id ? data.collaborations.find(person => person.id === editor.id) : undefined
+  const editingProject = editor?.kind === "project" && editor.id ? data.projects.find(project => project.id === editor.id) : undefined
+
+  return (
+    <section id="research" className="profile-section" aria-labelledby="research-heading">
+          <div className="section-heading">
+            <div>
+              <h2 id="research-heading">Research</h2>
+              <p>Research interests, projects and collaborations.</p>
+            </div>
+            <div className="page-actions">
+              <span className="save-status" role="status">{notice && !dirty && <><Check aria-hidden="true" />Changes saved</>}</span>
+              {dirty && <Button variant="outline" className="dashboard-button" disabled={saving || editor !== null} onClick={() => setData(saved)}>Discard changes</Button>}
+              <Button className="dashboard-button" disabled={!dirty || saving || editor !== null} onClick={() => void save()}><Save />{saving ? "Saving…" : "Save"}</Button>
+            </div>
+          </div>
+
+          {error && <p className="form-error-summary" role="alert">{error}</p>}
+          <section className="dashboard-card research-card" aria-labelledby="research-interests-heading">
+            <div className="card-heading"><h3 id="research-interests-heading">Research interests</h3></div>
+            <KeywordInput
+              id="research-interests"
+              keywords={data.interests}
+              onChange={interests => change(current => ({ ...current, interests }))}
+              label="Research interests"
+              inputLabel="New research interest"
+              showAddButton={false}
+              emptyText="No research interests yet. Add keywords that describe your research."
+            />
+          </section>
+
+          <section className="dashboard-card research-card" aria-labelledby="research-projects-heading">
+            <div className="card-heading">
+              <h3 id="research-projects-heading">Projects</h3>
+              <Button className="dashboard-button compact" disabled={editor !== null} onClick={() => openEditor({ kind: "project", id: null })}><Plus />Add project</Button>
+            </div>
+          {editor?.kind === "project" && (
+            <InlineRecordForm
+              key={editor.session}
+              onCancel={() => setEditor(null)}
+              idPrefix="project"
+              title={editingProject ? "Edit project" : "Add project"}
+              description="Research projects you led or took part in."
+              fields={projectFields}
+              initialValues={editingProject ? { ...editingProject } : {}}
+              submitLabel={editingProject ? "Save project" : "Add project"}
+              validate={(values): Record<string, string> => values.endYear && values.endYear < values.startYear ? { endYear: "Can't be before the start year." } : {}}
+              onSave={values => {
+                const project: Project = {
+                  id: editingProject?.id ?? crypto.randomUUID(),
+                  title: values.title, donor: values.donor, startYear: values.startYear, endYear: values.endYear ?? "",
+                  type: values.type as Project["type"], role: values.role,
+                }
+                change(current => ({
+                  ...current,
+                  projects: editingProject ? current.projects.map(item => item.id === project.id ? project : item) : [project, ...current.projects],
+                }))
+                setEditor(null)
+              }}
+            />
+          )}
+            <div className="data-table-wrap">
+              <table className="data-table projects-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Title</th><th scope="col">Donor</th><th scope="col">Period</th><th scope="col">Type</th><th scope="col">Role</th>
+                    <th scope="col"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.projects.length === 0
+                    ? <tr><td colSpan={6} className="data-table-empty">No projects yet. Use “Add project” to add one.</td></tr>
+                    : data.projects.map(project => (
+                      <tr key={project.id}>
+                        <td>{project.title}</td>
+                        <td>{project.donor}</td>
+                        <td className="nowrap">{period(project)}</td>
+                        <td><span className={`type-pill ${project.type === "International" ? "international" : "local"}`}>{project.type}</span></td>
+                        <td>{project.role}</td>
+                        <td>
+                          <div className="row-actions">
+                            <Button variant="outline" size="icon" className="icon-button" aria-label={`Edit ${project.title}`} disabled={editor !== null} onClick={() => openEditor({ kind: "project", id: project.id })}><Pencil /></Button>
+                            <Button variant="outline" size="icon" className="icon-button danger" aria-label={`Delete ${project.title}`} disabled={editor !== null} onClick={() => change(current => ({ ...current, projects: current.projects.filter(item => item.id !== project.id) }))}><Trash2 /></Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="dashboard-card research-card" aria-labelledby="research-collaboration-heading">
+            <div className="card-heading">
+              <h3 id="research-collaboration-heading">Research collaboration with other researchers</h3>
+              <Button variant="outline" className="dashboard-button compact" disabled={editor !== null} onClick={() => openEditor({ kind: "collaboration", id: null })}><Plus />Add collaboration</Button>
+            </div>
+          {editor?.kind === "collaboration" && (
+            <InlineRecordForm
+              key={editor.session}
+              onCancel={() => setEditor(null)}
+              idPrefix="collaboration"
+              title={editingCollaboration ? "Edit collaboration" : "Add collaboration"}
+              description="A researcher you work with, at Ilia State University or elsewhere."
+              fields={collaborationFields}
+              initialValues={editingCollaboration ? { ...editingCollaboration } : {}}
+              submitLabel={editingCollaboration ? "Save collaboration" : "Add collaboration"}
+              onSave={values => {
+                const person: Collaboration = { id: editingCollaboration?.id ?? crypto.randomUUID(), name: values.name, institution: values.institution, topic: values.topic }
+                change(current => ({ ...current, collaborations: editingCollaboration ? current.collaborations.map(item => item.id === person.id ? person : item) : [person, ...current.collaborations] }))
+                setEditor(null)
+              }}
+            />
+          )}
+            <div className="data-table-wrap">
+              <table className="data-table collaborations-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Researcher</th><th scope="col">Institution</th><th scope="col">Topic</th>
+                    <th scope="col"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.collaborations.length === 0
+                    ? <tr><td colSpan={4} className="data-table-empty">No collaborations yet.</td></tr>
+                    : data.collaborations.map(person => (
+                      <tr key={person.id}>
+                        <td><span className="researcher"><span className="researcher-avatar" aria-hidden="true">{initials(person.name)}</span>{person.name}</span></td>
+                        <td>{person.institution}</td>
+                        <td>{person.topic}</td>
+                        <td>
+                          <div className="row-actions">
+                            <Button variant="outline" size="icon" className="icon-button" aria-label={`Edit ${person.name}`} disabled={editor !== null} onClick={() => openEditor({ kind: "collaboration", id: person.id })}><Pencil /></Button>
+                            <Button variant="outline" size="icon" className="icon-button danger" aria-label={`Remove ${person.name}`} disabled={editor !== null} onClick={() => change(current => ({ ...current, collaborations: current.collaborations.filter(item => item.id !== person.id) }))}><Trash2 /></Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="dashboard-card research-card" aria-labelledby="research-organisations-heading">
+            <div className="card-heading"><h3 id="research-organisations-heading">Collaborating universities &amp; organisations</h3></div>
+            <KeywordInput
+              id="research-organisations"
+              keywords={data.organisations}
+              onChange={organisations => change(current => ({ ...current, organisations }))}
+              label="Collaborating organisations"
+              inputLabel="New organisation"
+              placeholder="Add an organisation"
+              emptyText="No organisations yet."
+              maxItems={30}
+              maxLength={120}
+            />
+          </section>
+    </section>
+  )
+}

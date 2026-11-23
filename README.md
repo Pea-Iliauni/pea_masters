@@ -7,7 +7,21 @@ Portal for Ilia State University staff: researcher profiles, evaluation forms an
 | `pea_masters_frontend/` | The web app: React + Vite, run with Bun |
 | `pea_masters_backend/` | The API: Python (FastAPI) + PostgreSQL in Docker, run with uv |
 
-People sign in with their university Google account. Only people an Admin has registered can sign in.
+People sign in with their university Google account (no passwords). Only people who have been registered can
+sign in.
+
+| Role | Who | What they do |
+|---|---|---|
+| **Root** | The application's developers | Everything, in every organization |
+| **Admin** | The organization's responsible person | Adds, deactivates and reactivates people; manages roles, faculties and departments of the whole organization; Admins and Root grant the Admin role |
+| **Coordinator** | Coordinates a department | Sends evaluation forms to the Researchers of their department, reviews them, and corrects their names |
+| **Researcher** | Academic staff (`member` in the database) | Keeps their profile and submits evaluations |
+
+Everyone can open **People** to find colleagues and their profiles (private profiles only show name and department).
+
+Structure: organization → **faculties** (schools, e.g. *School of Business, Technology and Education*) →
+**departments** (programs, e.g. *Computer Science*). Each Researcher belongs to a department; each department has one
+head (Coordinator).
 
 This page lists every command the project uses, what it does and when to run it. All commands are for
 **PowerShell on Windows**. Backend details are in [pea_masters_backend/README.md](pea_masters_backend/README.md).
@@ -51,7 +65,7 @@ Optional: in Docker Desktop → **Settings → General**, turn on **Start Docker
 ## 2. Get the code
 
 ```powershell
-git clone https://github.com/Gudadze2000/pea_masters.git
+git clone https://github.com/Pea-Iliauni/pea_masters.git
 cd pea_masters
 git switch backup_test_branch
 ```
@@ -165,17 +179,26 @@ Other frontend commands:
 
 ## 5. Register people
 
-After the first Admin exists, the normal way is the app: **Administration → People** (http://localhost:5173/admin/people).
+After the first Admin exists, the normal way is the app, as an Admin: **People** (http://localhost:5173/people).
 
-1. **Departments** tab → **Add department** for each department.
-2. **People** tab → **Add person**: email, name, department and roles.
-3. To make someone a Coordinator, edit them, tick **Coordinator** and choose their department (one Coordinator per department).
+1. **Structure** tab → **Add faculty** for each faculty or school, then **Add department** for each department in it.
+   Below that, **Add position** for each academic position (Professor, Associate Professor, …).
+2. **Add people**: type people in row by row, or **Download template**, fill it in Excel and **Fill from Excel**
+   (email, name (optional), faculty, department, roles; up to 1000 at a time). Nothing is saved until every row is
+   correct and you confirm. The same page deactivates people (tick **Deactivate**, or **X** in the Excel column).
+3. To make someone a Coordinator, edit them (pencil), tick **Coordinator** and choose their department under
+   **Coordinates department** (one Coordinator per department). Academic positions are set there too.
+
+**Names:** typing an ISU email (`name.surname.N@iliauni.edu.ge`) fills in the name. At the person's first sign-in,
+it's replaced by their official name from ISU's Google directory, which keeps it correct from then on. If an Admin or
+Coordinator corrects a name by hand, that correction is kept and Google never overwrites it.
 
 From the terminal (in `pea_masters_backend`), mainly for the first Admin:
 
 ```powershell
 uv run python -m scripts.seed --email name.surname@iliauni.edu.ge --name "Name Surname"
 uv run python -m scripts.seed --email classmate@iliauni.edu.ge --name "Name Surname" --role member
+uv run python -m scripts.seed --email dev.name@iliauni.edu.ge --name "Dev Name" --root
 uv run python -m scripts.seed --self-signup
 uv run python -m scripts.seed --no-self-signup
 uv run python -m scripts.seed --help
@@ -184,8 +207,9 @@ uv run python -m scripts.seed --help
 | Option | What it does |
 |---|---|
 | `--email`, `--name` | The person's university Google email and display name. The email must be in `iliauni.edu.ge`. |
-| `--role admin\|coordinator\|member` | Their role (default `admin`). Everyone also gets `member`. |
-| `--self-signup` / `--no-self-signup` | Lets anyone in the domain sign in and become a Member without being registered. **Development only.** |
+| `--role admin\|coordinator\|member` | Their role (default `admin`; `member` = Researcher). Everyone also gets `member`. Heads of department are easier to set up in the app, where you choose their department. |
+| `--root` | Also makes them **Root** (a developer with access to every organization). |
+| `--self-signup` / `--no-self-signup` | Lets anyone in the domain sign in and become a Researcher without being registered. **Development only.** |
 | `--help` | Lists all options. |
 
 The command must be run **inside `pea_masters_backend`**, and running it twice does no harm. Each person registers
@@ -216,6 +240,11 @@ Connection details for tools like DBeaver: host `127.0.0.1`, port `5434`, databa
 ---
 
 ## 7. Tests and code checks
+
+GitHub runs the same checks automatically on every pull request and on every push to `main` and
+`backup_test_branch` (`.github/workflows/ci.yml`): lint, API tests, the frontend build and the browser tests. The result
+shows on the pull request; merge only when it's green. If the browser tests fail, the run keeps their screenshots and
+server logs for 7 days (open the run → *Artifacts*).
 
 Run these in `pea_masters_backend` with Docker Desktop running. Tests use their own databases and never touch your data.
 
@@ -326,7 +355,8 @@ git pull
 | Vite started on **5174** instead of 5173 | Something already uses 5173 (often another `bun run dev`). Google sign-in only works on 5173; close the other one. |
 | Database connection hangs | Use `127.0.0.1`, not `localhost`, in `DATABASE_URL`: on Windows, `localhost` tries IPv6 first and stalls. |
 | `ports are not available` from Docker | Another program uses that port. This project uses 5434 for PostgreSQL to avoid the usual 5432/5433. |
-| No departments in the person form | Add them first in the **Departments** tab of the People page. |
+| No departments in the person form | Add a faculty and its departments first in the **Structure** tab of the People page. |
+| A department shows under "Departments not in a faculty" | It was made before faculties existed. Edit it in the **Structure** tab and choose its faculty. |
 
 Find what's using a port (PowerShell):
 

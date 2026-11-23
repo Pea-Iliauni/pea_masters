@@ -1,0 +1,146 @@
+/* People page (PeoplePage.tsx, PersonSheet.tsx, DepartmentsPanel.tsx) */
+
+.people-tabs { align-self: flex-start; }
+
+.people-load-error { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.org-select { width: auto; min-width: 200px; }
+
+.people-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.people-filters select.form-control { width: auto; min-width: 150px; }
+.people-search { position: relative; flex: 1 1 240px; min-width: 0; }
+.people-search svg { position: absolute; left: 12px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--muted-foreground); pointer-events: none; }
+.people-search .form-control { padding-left: 36px; }
+
+.people-table { min-width: 760px; }
+.people-table tr[data-inactive] td { color: var(--muted-foreground); }
+.people-table tr[data-inactive] .researcher-avatar { background: var(--muted); color: var(--muted-foreground); }
+.person-name { display: flex; flex-direction: column; min-width: 0; }
+.person-name small { font-size: 12px; line-height: 16px; font-weight: 400; color: var(--muted-foreground); }
+
+.role-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.role-chip { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; background: var(--muted); font-size: 12px; line-height: 18px; font-weight: 500; color: var(--color-neutral-700); white-space: nowrap; }
+.role-chip.role-admin { background: var(--color-brand-100); color: var(--color-brand-700); }
+.role-chip.role-coordinator { background: var(--info-soft); color: var(--info); }
+
+/* Shown in the person form while the organization has no departments */
+.empty-departments { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius-lg); background: var(--color-neutral-25); }
+.empty-departments p { font-size: 13px; line-height: 20px; color: var(--color-neutral-600); }
+
+/* Role checkboxes in the person form */
+.role-fieldset { border: 0; padding: 0; margin: 0; gap: 8px; }
+.role-fieldset legend { margin-bottom: 6px; font-size: 13px; line-height: 20px; font-weight: 500; color: var(--color-neutral-700); }
+.role-option { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-lg); cursor: pointer; }
+.role-option:has(input:checked) { border-color: var(--color-brand-200); background: var(--color-neutral-25); }
+.role-option .form-checkbox { margin-top: 2px; flex: none; }
+.role-option span { display: flex; flex-direction: column; gap: 2px; }
+.role-option strong { font-size: 14px; line-height: 20px; font-weight: 500; }
+.role-option small { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+
+@media (max-width: 767.98px) {
+  .people-filters select.form-control { flex: 1 1 140px; }
+  .org-select { width: 100%; }
+}
+
+/* Structure tab: faculties with their departments */
+.structure-heading { align-items: flex-start; flex-wrap: wrap; }
+.card-subtitle { margin-top: 4px; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+.structure-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.structure-empty { padding: 24px 0; }
+.structure-list { display: flex; flex-direction: column; gap: 24px; }
+.faculty-block { display: flex; flex-direction: column; gap: 12px; }
+.faculty-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.faculty-heading h3 { font-size: 15px; line-height: 22px; font-weight: 600; }
+.faculty-heading small { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+.small-button.dashboard-button { height: 32px; padding: 4px 10px; font-size: 13px; }
+
+/* A value shown instead of an input (e.g. a head of department's fixed department) */
+.read-only-value { min-height: 40px; display: flex; align-items: center; padding: 8px 12px; border-radius: var(--radius-md); background: var(--muted); font-size: 14px; line-height: 22px; }
+
+/* Research output (ResearchOutputPanel.tsx) */
+.research-output { display: flex; flex-direction: column; gap: 16px; }
+.research-output-heading { align-items: flex-start; flex-wrap: wrap; gap: 12px 24px; }
+.research-output-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.research-output-filters .form-control { width: auto; min-width: 96px; max-width: 280px; height: 40px; padding: 6px 10px; }
+.research-output-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-neutral-600); }
+.research-output-status svg { width: 16px; height: 16px; }
+.research-output-totals { display: flex; flex-wrap: wrap; gap: 12px; }
+.research-output-totals > div { min-width: 96px; padding: 12px 16px; border-radius: 12px; background: var(--muted); }
+.research-output-totals dt { font-size: 12px; line-height: 16px; color: var(--color-neutral-600); }
+.research-output-totals dd { font-size: 22px; line-height: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.research-output-note { margin-top: -8px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+.research-output-warning { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--color-warning-50); color: var(--color-warning-600); font-size: 13px; line-height: 20px; }
+.research-output-warning svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; }
+.research-output-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Person names are row headers: styled like cells, not like the column headers */
+.research-output-table tbody th[scope="row"] { padding: 14px 16px; background: none; font-size: 14px; line-height: 22px; letter-spacing: 0; font-weight: 400; text-transform: none; color: var(--foreground); white-space: normal; }
+.research-output-name { display: block; font-weight: 500; }
+.research-output-table th[scope="row"] small { font-size: 12px; color: var(--muted-foreground); }
+.research-output-missing { color: var(--muted-foreground); font-size: 13px; }
+
+/* Add several people (ImportPeoplePage.tsx) */
+.import-card { display: flex; flex-direction: column; gap: 16px; }
+.import-heading { flex-wrap: wrap; gap: 12px; align-items: center; }
+.import-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.import-info { padding: 10px 14px; border-radius: var(--radius-lg); background: var(--info-soft); color: var(--info); font-size: 13px; line-height: 20px; font-weight: 500; }
+.import-card .form-error-summary { display: flex; align-items: flex-start; gap: 8px; }
+.import-card .form-error-summary svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; }
+.import-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; line-height: 20px; color: var(--color-neutral-600); }
+.import-summary-problems { color: var(--destructive); font-weight: 500; }
+.import-filter { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.import-table { min-width: 1000px; table-layout: fixed; }
+.import-table col.c-number { width: 40px; } .import-table col.c-roles { width: 124px; } .import-table col.c-deactivate { width: 92px; } .import-table col.c-remove { width: 52px; }
+.import-table col.c-email { width: 26%; } .import-table col.c-name { width: 18%; }
+.import-table td { padding: 8px; vertical-align: top; }
+.import-table th { padding: 10px 8px; }
+.import-table .form-control { min-height: 36px; padding: 6px 10px; font-size: 13px; line-height: 20px; }
+.import-table select.form-control { padding-right: 28px; background-position: right 6px center; text-overflow: ellipsis; }
+.import-table .field-error { margin-top: 4px; overflow-wrap: anywhere; }
+.import-table tr[data-problem] td { background: color-mix(in srgb, var(--danger-soft) 45%, transparent); }
+.import-number { padding-top: 16px !important; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; text-align: right; }
+.import-roles { display: flex; flex-direction: column; gap: 4px; border: 0; margin: 0; padding: 6px 0 0; }
+.import-roles label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; line-height: 18px; white-space: nowrap; cursor: pointer; }
+.import-show-all { align-self: flex-start; }
+.import-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+.import-done { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }
+.import-done > svg { width: 28px; height: 28px; padding: 4px; border-radius: 99px; background: var(--success-soft, var(--muted)); color: var(--success, var(--foreground)); flex-shrink: 0; }
+.import-done > div:first-of-type { flex: 1 1 320px; display: flex; flex-direction: column; gap: 4px; }
+.import-done h2 { font-size: 16px; line-height: 24px; font-weight: 600; }
+.import-done p { font-size: 14px; line-height: 22px; color: var(--color-neutral-600); }
+.import-done-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.import-table th .optional { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.import-table tr[data-deactivate]:not([data-problem]) td { background: var(--color-neutral-25, var(--muted)); }
+.import-table tr[data-deactivate] .form-control:disabled { opacity: .45; }
+.import-table .field-hint { margin-top: 4px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+.import-deactivate { text-align: center; }
+.import-deactivate .form-checkbox { margin-top: 10px; }
+.import-fixed-role { padding-top: 8px; font-size: 13px; line-height: 20px; color: var(--color-neutral-600); }
+
+/* People: names open the person's page */
+.person-link { color: inherit; text-decoration: none; border-radius: var(--radius-md); }
+.person-link:hover .person-link-name { color: var(--color-brand-700, var(--primary)); text-decoration: underline; text-underline-offset: 3px; }
+.person-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.person-link-name { font-weight: 500; }
+.people-count { font-size: 13px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.people-table[data-compact] { min-width: 640px; }
+.people-filters .people-search { order: 4; }
+
+/* A person's page (PersonPage.tsx) */
+.person-page-actions { justify-content: flex-start; }
+.person-private-note { display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px; border-radius: var(--radius-lg); background: var(--muted); font-size: 13px; line-height: 20px; color: var(--color-neutral-700); }
+.person-private-note svg, .person-private-message svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; }
+.person-private { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; }
+.person-private > div:last-child { display: flex; flex-direction: column; gap: 8px; flex: 1 1 280px; min-width: 0; }
+.person-private h1 { font-size: 22px; line-height: 30px; font-weight: 600; }
+.person-private-message { display: flex; gap: 8px; margin-top: 4px; padding: 12px 14px; border-radius: var(--radius-lg); background: var(--muted); font-size: 14px; line-height: 22px; color: var(--color-neutral-700); }
+
+/* Add people: a row fixed while only the rows that need fixing are shown stays, marked as fixed */
+.import-table tr[data-fixed] td { background: color-mix(in srgb, var(--success-soft) 55%, transparent); }
+.import-table tr[data-fixed] td:first-child { box-shadow: inset 3px 0 0 var(--success); }
+.import-summary-fixed { display: inline-flex; align-items: center; gap: 6px; color: var(--success); font-weight: 500; }
+.import-summary-fixed svg { width: 14px; height: 14px; }
+
+/* A person's public CV under their profile (the CV builder's own document styles) */
+.person-cv { display: flex; flex-direction: column; gap: 12px; }
+.person-cv h2 { display: flex; align-items: center; gap: 8px; font-size: 18px; line-height: 26px; font-weight: 600; }
+.person-cv h2 svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+.person-cv-paper { max-height: none; }

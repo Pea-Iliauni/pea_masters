@@ -1,0 +1,502 @@
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import { Navigate, useNavigate, useParams } from "react-router"
+import { Bell, Check, Database, Download, Globe, Info, Lock, LogOut, Palette, Save, ShieldCheck, UserRound } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout"
+import { Switch } from "@/components/forms/Switch"
+import "@/components/forms/forms.css"
+import { useLanguage } from "@/lib/language-context"
+import { signOut, useSession } from "@/lib/auth"
+import { saveVisibility, useIdentity, useMyProfile, useProfile } from "@/lib/profile"
+import { ApiError } from "@/lib/api"
+import { applyDisplaySettings, loadSettings, saveSettings, type Settings } from "@/lib/settings"
+import { themes, type ThemeId } from "@/lib/themes"
+import { timeZones } from "./settingsMock"
+import "./SettingsPage.css"
+
+const sections = [
+  { id: "account", label: "Account", icon: UserRound, description: "Your university account details." },
+  { id: "security", label: "Sign-in & security", icon: ShieldCheck, description: "How you sign in to PEA." },
+  { id: "notifications", label: "Notifications", icon: Bell, description: "What PEA tells you about." },
+  { id: "language", label: "Language & accessibility", icon: Globe, description: "Interface language, date format, time zone and motion." },
+  { id: "customization", label: "Customization", icon: Palette, description: "Colour theme of the app." },
+  { id: "privacy", label: "Privacy", icon: Lock, description: "Control who can see your public profile." },
+  { id: "data", label: "Your data", icon: Database, description: "Download your data or sign out." },
+] as const
+
+type SectionId = (typeof sections)[number]["id"]
+
+/** Sections whose fields are saved with the "Save changes" button in the page heading */
+const preferenceSections: SectionId[] = ["language", "customization", "privacy"]
+
+const notificationEvents: { label: string; hint: string }[] = [
+  { label: "An evaluation form is sent to you", hint: "Or changed before you start filling it in" },
+  { label: "Your coordinator decides", hint: "An entry is rejected, or your form is returned or approved" },
+  { label: "Your deadline is near", hint: "A week before it, if your form isn't submitted yet" },
+  { label: "An Admin makes an exception", hint: "Your deadline is extended, or an approval is reopened" },
+  { label: "Coordinators: a form is submitted", hint: "When one of your researchers submits or resubmits" },
+]
+
+const dateFormats: Settings["dateFormat"][] = ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]
+
+function formatDate(date: Date, format: Settings["dateFormat"]) {
+  const dd = String(date.getDate()).padStart(2, "0")
+  const mm = String(date.getMonth() + 1).padStart(2, "0")
+  const yyyy = String(date.getFullYear())
+  return format.replace("DD", dd).replace("MM", mm).replace("YYYY", yyyy)
+}
+
+function sameSettings(a: Settings, b: Settings) {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+/** One labelled row with a control on the right (switch, select, ...) */
+function SettingRow({ id, label, hint, children }: { id: string; label: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className="setting-row">
+      <div className="setting-text">
+        <p id={`${id}-label`}>{label}</p>
+        {hint && <small id={`${id}-hint`}>{hint}</small>}
+      </div>
+      <div className="setting-control">{children}</div>
+    </div>
+  )
+}
+
+function InfoBanner({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="info-banner">
+      <Info aria-hidden="true" />
+      <div><p>{title}</p><small>{children}</small></div>
+    </div>
+  )
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="settings-readonly-field">
+      <dt>{label}<Lock aria-label="Locked" /></dt>
+      <dd>{value}</dd>
+    </div>
+  )
+}
+
+/** /settings/:sectionId */
+export function SettingsPage() {
+  const { sectionId } = useParams()
+  const navigate = useNavigate()
+  const { language, setLanguage } = useLanguage()
+
+  const [saved, setSaved] = useState<Settings>(() => ({ ...loadSettings(), language }))
+  const [draft, setDraft] = useState<Settings>(saved)
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState(false)
+  const timer = useRef<number | undefined>(undefined)
+
+  // The top-bar language switch changes the language directly; keep this page in step
+  const [seenLanguage, setSeenLanguage] = useState(language)
+  if (seenLanguage !== language) {
+    setSeenLanguage(language)
+    setSaved(current => ({ ...current, language }))
+    setDraft(current => ({ ...current, language }))
+  }
+
+  const dirty = !sameSettings(draft, saved)
+
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+
+  // Preview the chosen colour theme across the app while it is still a draft...
+  useEffect(() => { applyDisplaySettings({ ...saved, theme: draft.theme }) }, [draft.theme, saved])
+  // ...and fall back to the saved one when leaving Settings without saving
+  useEffect(() => () => applyDisplaySettings(loadSettings()), [])
+
+  // Warn before closing the tab with unsaved changes
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault()
+    window.addEventListener("beforeunload", warn)
+    return () => window.removeEventListener("beforeunload", warn)
+  }, [dirty])
+
+  // /settings with no section shows Account directly (redirecting would flash an empty frame)
+  const section = sectionId === undefined ? sections[0] : sections.find(item => item.id === sectionId)
+  if (!section) return <Navigate to="/settings/account" replace />
+
+  const update = <K extends keyof Settings>(key: K, value: Settings[K]) => {
+    setDraft(current => ({ ...current, [key]: value }))
+    setNotice(false)
+  }
+
+  const cancel = () => { setDraft(saved); setNotice(false) }
+
+  const save = () => {
+    setSaving(true)
+    // TODO: replace with the API call once the back end exists
+    timer.current = window.setTimeout(() => {
+      saveSettings(draft)
+      applyDisplaySettings(draft)
+      if (draft.language !== language) {
+        setSeenLanguage(draft.language)
+        setLanguage(draft.language)
+      }
+      setSaved(draft)
+      setSaving(false)
+      setNotice(true)
+      timer.current = window.setTimeout(() => setNotice(false), 4000)
+    }, 500)
+  }
+
+  const showSaveActions = preferenceSections.includes(section.id)
+
+  return (
+    <WorkspaceLayout breadcrumb={[{ label: "Settings", to: "/settings/account" }, { label: section.label }]}>
+      {() => (
+        <div className="dashboard-content">
+          <div className="page-heading">
+            <div>
+              <h1>Settings</h1>
+              <p>Manage your account, security and preferences.</p>
+            </div>
+            {showSaveActions && (
+              <div className="page-actions settings-actions">
+                <span className="save-status" role="status">{notice && !dirty && <><Check aria-hidden="true" />Changes saved</>}</span>
+                <Button variant="outline" className="dashboard-button" disabled={!dirty || saving} onClick={cancel}>Cancel</Button>
+                <Button className="dashboard-button" disabled={!dirty || saving} onClick={save}><Save />{saving ? "Saving…" : "Save changes"}</Button>
+              </div>
+            )}
+          </div>
+
+          <div className="settings-layout">
+            <nav className="dashboard-card settings-nav" aria-label="Settings sections">
+              <ul>
+                {sections.map(item => {
+                  const Icon = item.icon
+                  return (
+                    <li key={item.id}>
+                      <button aria-current={item.id === section.id ? "page" : undefined} onClick={() => navigate(`/settings/${item.id}`)}>
+                        <Icon aria-hidden="true" />
+                        <span>{item.label}</span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </nav>
+
+            <div className="settings-panels">
+              {section.id === "account" && <AccountSection onEditProfile={() => navigate("/profile/general")} />}
+              {section.id === "security" && <SecuritySection />}
+              {section.id === "notifications" && (
+                <NotificationsSection />
+              )}
+              {section.id === "language" && <LanguageSection settings={draft} onChange={update} />}
+              {section.id === "customization" && <CustomizationSection theme={draft.theme} onChange={theme => update("theme", theme)} />}
+              {section.id === "privacy" && <PrivacySection settings={draft} onChange={update} />}
+              {section.id === "data" && <DataSection settings={saved} onSignOut={() => { void signOut(); navigate("/login", { replace: true }) }} />}
+            </div>
+          </div>
+        </div>
+      )}
+    </WorkspaceLayout>
+  )
+}
+
+/* ---------- Account ---------- */
+
+function AccountSection({ onEditProfile }: { onEditProfile: () => void }) {
+  const { photo } = useProfile()
+  const account = useIdentity()
+  return (
+    <>
+      <section className="dashboard-card settings-card" aria-labelledby="account-heading">
+        <div className="card-heading">
+          <h2 id="account-heading">Account</h2>
+          <Button variant="outline" className="dashboard-button settings-small-button" onClick={onEditProfile}>Edit public profile</Button>
+        </div>
+        <div className="settings-account">
+          <div className="settings-account-avatar" aria-hidden="true">{photo ? <img src={photo} alt="" /> : account.initials}</div>
+          <div>
+            <p className="settings-account-name">{account.fullName}</p>
+            <small>{[account.position, account.department, account.faculty].filter(Boolean).join(" · ") || account.email}</small>
+          </div>
+        </div>
+        <dl className="settings-readonly-grid">
+          <ReadOnlyField label="Full name" value={account.fullName} />
+          <ReadOnlyField label="University email" value={account.email} />
+          <ReadOnlyField label="Faculty / School" value={account.faculty || "Not set"} />
+          <ReadOnlyField label="Department" value={account.department || "Not set"} />
+          <ReadOnlyField label="Academic position" value={account.position || "Not set"} />
+        </dl>
+        <InfoBanner title="Managed by your organization">
+          Your name and email come from your university Google account. Your faculty, department and position are set
+          by your organization's PEA Admin; contact them to change these.
+        </InfoBanner>
+      </section>
+    </>
+  )
+}
+
+/* ---------- Sign-in & security ---------- */
+
+/** PEA has no passwords: people sign in with their university Google account, whose security Google manages. */
+function SecuritySection() {
+  const session = useSession()
+  return (
+    <section className="dashboard-card settings-card" aria-labelledby="signin-heading">
+      <div className="card-heading"><h2 id="signin-heading">How you sign in</h2></div>
+      <div className="form-grid">
+        <ReadOnlyField label="Sign-in method" value="Google (university account)" />
+        <ReadOnlyField label="Account" value={session?.email ?? ""} />
+      </div>
+      <InfoBanner title="No PEA password">
+        You sign in with your university Google account, so there's no separate password to change here. Your password,
+        two-step verification and signed-in devices are managed in your Google account.
+      </InfoBanner>
+      <div className="settings-form-actions">
+        <a className="dashboard-button settings-link-button" href="https://myaccount.google.com/security" target="_blank" rel="noreferrer">
+          <ShieldCheck aria-hidden="true" />Open Google account security
+        </a>
+      </div>
+    </section>
+  )
+}
+
+/* ---------- Notifications ---------- */
+
+/** What PEA notifies people about. Only in the app for now: there's nothing to switch on or off yet. */
+function NotificationsSection() {
+  return (
+    <section className="dashboard-card settings-card" aria-labelledby="notify-heading">
+      <div className="card-heading"><h2 id="notify-heading">Notifications</h2></div>
+      <p className="settings-notify-intro">PEA tells you under the bell in the top bar when:</p>
+      <ul className="settings-notify-list">
+        {notificationEvents.map(event => <li key={event.label}><p className="settings-event-label">{event.label}</p><small className="settings-event-hint">{event.hint}</small></li>)}
+      </ul>
+      <InfoBanner title="Email comes later">
+        For now notifications are only shown in PEA itself. Once PEA can send email, you'll be able to choose here which
+        of them also reach your inbox.
+      </InfoBanner>
+    </section>
+  )
+}
+
+/* ---------- Language & accessibility ---------- */
+
+function LanguageSection({ settings, onChange }: { settings: Settings; onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void }) {
+  const today = new Date()
+  return (
+    <>
+      <section className="dashboard-card settings-card" aria-labelledby="language-heading">
+        <div className="card-heading"><h2 id="language-heading">Language &amp; region</h2></div>
+        <SettingRow id="language" label="Interface language" hint="Also the language you enter profile content in. You can switch it in the top bar too.">
+          <select className="form-control settings-select" aria-labelledby="language-label" aria-describedby="language-hint" value={settings.language} onChange={e => onChange("language", e.target.value as Settings["language"])}>
+            <option value="EN">English</option>
+            <option value="KA" lang="ka">ქართული (Georgian)</option>
+          </select>
+        </SettingRow>
+        <SettingRow id="date-format" label="Date format" hint={`Today would be shown as ${formatDate(today, settings.dateFormat)}.`}>
+          <select className="form-control settings-select" aria-labelledby="date-format-label" aria-describedby="date-format-hint" value={settings.dateFormat} onChange={e => onChange("dateFormat", e.target.value as Settings["dateFormat"])}>
+            {dateFormats.map(format => <option key={format} value={format}>{format}</option>)}
+          </select>
+        </SettingRow>
+        <SettingRow id="time-zone" label="Time zone" hint="Used for deadlines and reminders.">
+          <select className="form-control settings-select" aria-labelledby="time-zone-label" aria-describedby="time-zone-hint" value={settings.timeZone} onChange={e => onChange("timeZone", e.target.value)}>
+            {timeZones.map(zone => <option key={zone} value={zone}>{zone.replace("_", " ")}</option>)}
+          </select>
+        </SettingRow>
+      </section>
+
+      <section className="dashboard-card settings-card" aria-labelledby="accessibility-heading">
+        <div className="card-heading"><h2 id="accessibility-heading">Accessibility</h2></div>
+        <SettingRow id="reduce-motion" label="Reduce motion" hint="Turn off animations and sliding panels.">
+          <Switch checked={settings.reduceMotion} onChange={value => onChange("reduceMotion", value)} labelledBy="reduce-motion-label" describedBy="reduce-motion-hint" />
+        </SettingRow>
+      </section>
+    </>
+  )
+}
+
+/* ---------- Customization ---------- */
+
+function CustomizationSection({ theme, onChange }: { theme: ThemeId; onChange: (theme: ThemeId) => void }) {
+  return (
+    <section className="dashboard-card settings-card" aria-labelledby="theme-heading">
+      <div className="card-heading"><h2 id="theme-heading">Colour theme</h2></div>
+      <p className="settings-card-intro" id="theme-hint">Pick a theme to preview it across the app, then save changes to keep it.</p>
+      <div className="theme-grid" role="radiogroup" aria-labelledby="theme-heading" aria-describedby="theme-hint">
+        {themes.map(option => {
+          const selected = option.id === theme
+          return (
+            <label key={option.id} className="theme-option">
+              <input type="radio" name="theme" value={option.id} checked={selected} onChange={() => onChange(option.id)} className="sr-only" />
+              <span className="theme-swatches" aria-hidden="true">
+                {option.swatches.map(swatch => <span key={swatch.name} style={{ background: swatch.hex }} title={`${swatch.name} ${swatch.hex}`} />)}
+              </span>
+              <span className="theme-option-body">
+                <span className="theme-option-title">
+                  <span>{option.name}</span>
+                  <span className="theme-mode">{option.mode === "dark" ? "Dark" : "Light"}</span>
+                  {selected && <Check className="theme-selected" aria-hidden="true" />}
+                </span>
+                <small>{option.description}</small>
+              </span>
+            </label>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+/* ---------- Privacy ---------- */
+
+const visibilityOptions: { value: "public" | "private"; label: string; hint: string }[] = [
+  { value: "public", label: "Everyone at the university", hint: "Anyone signed in to PEA can open your profile from the People page." },
+  { value: "private", label: "Private", hint: "Only you, your organization's Admins and your Coordinator, who review you. Others see your name and department, and that your profile is private." },
+]
+
+/** Saved on the server right away (app/profiles.py, PUT /me/profile/visibility) */
+function ProfileVisibility() {
+  const { profile } = useMyProfile()
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
+  // The choice shows at once; if saving fails it goes back
+  const [pending, setPending] = useState<"public" | "private" | null>(null)
+  const current = pending ?? (profile ? (profile.is_public ? "public" : "private") : null)
+
+  async function choose(value: "public" | "private") {
+    if (saving || value === current) return
+    setSaving(true)
+    setPending(value)
+    setMessage(null)
+    try {
+      await saveVisibility({ is_public: value === "public" })
+      setMessage({ ok: true, text: value === "public" ? "Your profile is visible to everyone at the university." : "Your profile is private." })
+    } catch (cause) {
+      setMessage({ ok: false, text: cause instanceof ApiError ? cause.message : "Couldn't save. Please try again." })
+    } finally {
+      setSaving(false)
+      setPending(null)
+    }
+  }
+
+  return (
+    <section className="dashboard-card settings-card" aria-labelledby="visibility-heading" aria-busy={saving}>
+      <div className="card-heading"><h2 id="visibility-heading">Who can see your profile</h2></div>
+      <div className="settings-radio-group" role="radiogroup" aria-labelledby="visibility-heading">
+        {visibilityOptions.map(option => (
+          <label key={option.value} className="settings-radio">
+            <input type="radio" name="profile-visibility" value={option.value} checked={current === option.value}
+              disabled={current === null || saving} onChange={() => void choose(option.value)} />
+            <span>
+              <span className="settings-radio-label">{option.label}</span>
+              <small>{option.hint}</small>
+            </span>
+          </label>
+        ))}
+      </div>
+      {message && <p className={message.ok ? "settings-saved" : "field-error"} role="status">{message.ok && <Check aria-hidden="true" />}{message.text}</p>}
+    </section>
+  )
+}
+
+/** "Show my email" and "Show my photo": saved on the server right away, like the visibility choice */
+function ProfileShows({ hidden }: { hidden: boolean }) {
+  const { profile } = useMyProfile()
+  // A switch shows its new position at once; if saving fails it goes back
+  const [pending, setPending] = useState<{ show_email?: boolean; show_photo?: boolean }>({})
+  const [failure, setFailure] = useState("")
+
+  async function toggle(key: "show_email" | "show_photo", value: boolean) {
+    setPending(current => ({ ...current, [key]: value }))
+    setFailure("")
+    try {
+      await saveVisibility({ [key]: value })
+    } catch (cause) {
+      setFailure(cause instanceof ApiError ? cause.message : "Couldn't save. Please try again.")
+    } finally {
+      setPending(current => {
+        const next = { ...current }
+        delete next[key]
+        return next
+      })
+    }
+  }
+
+  const value = (key: "show_email" | "show_photo") => pending[key] ?? profile?.[key] ?? true
+  const off = !profile || hidden
+  return (
+    <>
+      <SettingRow id="show-email" label="Show my email address" hint="On the People page and your profile. Your Admins and Coordinator always see it.">
+        <Switch checked={value("show_email")} onChange={next => void toggle("show_email", next)} labelledBy="show-email-label" describedBy="show-email-hint" disabled={off} />
+      </SettingRow>
+      <SettingRow id="show-photo" label="Show my photo" hint="Otherwise colleagues see your initials. Your Admins and Coordinator always see it.">
+        <Switch checked={value("show_photo")} onChange={next => void toggle("show_photo", next)} labelledBy="show-photo-label" describedBy="show-photo-hint" disabled={off} />
+      </SettingRow>
+      {failure && <p className="field-error" role="alert">{failure}</p>}
+    </>
+  )
+}
+
+function PrivacySection({ settings, onChange }: { settings: Settings; onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void }) {
+  const { profile } = useMyProfile()
+  const hidden = profile ? !profile.is_public : false
+  return (
+    <>
+      <ProfileVisibility />
+
+      <section className="dashboard-card settings-card" aria-labelledby="shown-heading">
+        <div className="card-heading"><h2 id="shown-heading">What your profile shows</h2></div>
+        <ProfileShows hidden={hidden} />
+        <SettingRow id="indexing" label="Let search engines find my profile" hint="Your profile can appear in Google and other search results.">
+          <Switch checked={settings.searchIndexing && !hidden} onChange={value => onChange("searchIndexing", value)} labelledBy="indexing-label" describedBy="indexing-hint" disabled={hidden} />
+        </SettingRow>
+        {hidden && (
+          <InfoBanner title="Your profile is private">
+            These options apply again when you make your profile visible.
+          </InfoBanner>
+        )}
+      </section>
+    </>
+  )
+}
+
+/* ---------- Your data ---------- */
+
+function DataSection({ settings, onSignOut }: { settings: Settings; onSignOut: () => void }) {
+  const account = useIdentity()
+  const download = () => {
+    const data = { exportedAt: new Date().toISOString(), account, settings }
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }))
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "pea-my-data.json"
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <>
+      <section className="dashboard-card settings-card" aria-labelledby="export-heading">
+        <div className="card-heading"><h2 id="export-heading">Download your data</h2></div>
+        <SettingRow id="export" label="Export a copy" hint="Your account details and settings as a JSON file.">
+          <Button variant="outline" className="dashboard-button" onClick={download}><Download />Download</Button>
+        </SettingRow>
+      </section>
+
+      <section className="dashboard-card settings-card" aria-labelledby="session-heading">
+        <div className="card-heading"><h2 id="session-heading">Sign out</h2></div>
+        <SettingRow id="sign-out" label="Sign out on this device" hint="You'll need your university email and password to sign in again.">
+          <Button variant="outline" className="dashboard-button" onClick={onSignOut}><LogOut />Sign out</Button>
+        </SettingRow>
+      </section>
+
+      <section className="dashboard-card settings-card" aria-labelledby="close-heading">
+        <div className="card-heading"><h2 id="close-heading">Close account</h2></div>
+        <InfoBanner title="Accounts are managed by Ilia State University">
+          Your account is closed automatically when you leave the university. To close it sooner, contact your faculty admin.
+        </InfoBanner>
+      </section>
+    </>
+  )
+}

@@ -1,0 +1,21 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# end-to-end test output
+tests/e2e/screenshots/
+tests/e2e/logs/
+test-results/
+
+# uploaded files (development)
+storage/

@@ -1,0 +1,255 @@
+import { useEffect, useMemo, useState } from "react"
+import { Navigate, useLocation, useParams } from "react-router"
+import { AlertDialog } from "@base-ui/react/alert-dialog"
+import { BookOpen, Check, CircleDashed, Plus } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout"
+import { useMyProfile } from "@/lib/profile"
+import { useQualifications } from "./qualifications/qualifications-store"
+import { capitalize, profileSections as ordered, type SectionDef } from "./qualifications/sections"
+import { PublicProfilePreview } from "./preview/PublicProfilePreview"
+import { AboutSection } from "./sections/AboutSection"
+import { LanguagesSection } from "./sections/LanguagesSection"
+import { ProfileHeader } from "./sections/ProfileHeader"
+import { entryTitle, QualificationSection } from "./sections/QualificationSection"
+import { ResearchSection } from "./sections/ResearchSection"
+import { ResearchOutputsSection } from "./sections/ResearchOutputsSection"
+import { useOutputs } from "@/lib/research-outputs"
+import { TeachingSection } from "./sections/TeachingSection"
+import "./ProfilePage.css"
+
+type Editor = { sectionId: string; entryId: string | null }
+/** Router state for links that open an editor, e.g. from a notification */
+export type ProfileLinkState = { add?: string; edit?: Editor }
+
+function scrollToSection(id: string, behavior: ScrollBehavior = "smooth") {
+  const element = document.getElementById(id)
+  if (!element) return false
+  element.scrollIntoView({ behavior, block: "start" })
+  history.replaceState(history.state, "", `#${id}`)
+  return true
+}
+
+/**
+ * My profile, on one page: who you are, your biography and photo, the qualification sections you've filled in,
+ * one place to add the others, then teaching and research. A contents list on the side jumps to each part.
+ */
+export function ProfilePage() {
+  const { status, profile } = useMyProfile()
+  const { entries, status: entriesStatus, reload, deleteEntry, notice, flash } = useQualifications()
+  const location = useLocation()
+  const linkState = location.state as ProfileLinkState | null
+  const [editor, setEditor] = useState<Editor | null>(() =>
+    linkState?.edit ?? (linkState?.add ? { sectionId: linkState.add, entryId: null } : null))
+  /** Empty sections the person chose to add to, so they show even before the first entry is saved */
+  const [revealed, setRevealed] = useState<Set<string>>(() => new Set(linkState?.add ? [linkState.add] : []))
+  const [deleting, setDeleting] = useState<Editor | null>(null)
+  const [active, setActive] = useState("general")
+  const [previewing, setPreviewing] = useState(false)
+
+  // Research outputs: shown once there are some (or the person chose to add one), offered below until then
+  const outputs = useOutputs()
+  const showOutputs = outputs.status !== "ready" || outputs.outputs.length > 0 || revealed.has("outputs")
+  const revealOutputs = () => {
+    setRevealed(current => new Set(current).add("outputs"))
+    requestAnimationFrame(() => scrollToSection("outputs"))
+  }
+
+  const isShown = (section: SectionDef) => (entries[section.id]?.length ?? 0) > 0 || revealed.has(section.id) || editor?.sectionId === section.id
+  const shown = ordered.filter(isShown)
+  const hidden = ordered.filter(section => !isShown(section))
+
+  // Arriving at /profile#awards (or from an old address): scroll there once the sections exist
+  const hash = location.hash.slice(1)
+  useEffect(() => {
+    if (!hash || !profile) return
+    const frame = requestAnimationFrame(() => scrollToSection(hash, "auto"))
+    return () => cancelAnimationFrame(frame)
+  }, [hash, profile])
+
+  // Highlight the part of the page being read in the contents list
+  const offerMore = hidden.length > 0 || !showOutputs
+  const ids = useMemo(() => ["general", ...shown.map(s => s.id), ...(offerMore ? ["add-more"] : []), "teaching", "research", ...(showOutputs ? ["outputs"] : [])], [shown, offerMore, showOutputs])
+  useEffect(() => {
+    const observer = new IntersectionObserver(observed => {
+      const visible = observed.filter(entry => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+      if (visible[0]) setActive(visible[0].target.id)
+    }, { rootMargin: "-10% 0px -70% 0px" })
+    for (const id of ids) {
+      const element = document.getElementById(id)
+      if (element) observer.observe(element)
+    }
+    return () => observer.disconnect()
+  }, [ids, profile])
+
+  const openEditor = (sectionId: string, entryId: string | null) => {
+    setEditor({ sectionId, entryId })
+    setRevealed(current => new Set(current).add(sectionId))
+    requestAnimationFrame(() => scrollToSection(sectionId))
+  }
+
+  const closeEditor = () => {
+    const sectionId = editor?.sectionId
+    setEditor(null)
+    // An empty section goes back to "Add to your profile" when nothing was saved in it
+    if (sectionId && (entries[sectionId]?.length ?? 0) === 0) {
+      setRevealed(current => { const next = new Set(current); next.delete(sectionId); return next })
+    }
+  }
+
+  const confirmDelete = () => {
+    if (!deleting) return
+    const section = ordered.find(s => s.id === deleting.sectionId)
+    setDeleting(null)
+    deleteEntry(deleting.sectionId, deleting.entryId!)
+      .then(() => flash(`${capitalize(section?.noun ?? "entry")} deleted.`))
+      .catch(() => flash("That entry couldn't be deleted. Try again."))
+  }
+
+  const deletingSection = deleting ? ordered.find(s => s.id === deleting.sectionId) : undefined
+  const deletingEntry = deleting && deletingSection ? entries[deleting.sectionId]?.find(e => e.id === deleting.entryId) : undefined
+
+  return (
+    <WorkspaceLayout breadcrumb={[{ label: "My profile" }]}>
+      {() => !profile ? (
+        <div className="dashboard-content">
+          <div className="page-heading"><div><h1>My profile</h1></div></div>
+          <div className="dashboard-card" role={status === "error" ? "alert" : "status"}>
+            {status === "error" ? "Your profile couldn't be loaded. Check your connection and reload the page." : "Loading your profile…"}
+          </div>
+        </div>
+      ) : (
+        <div className="dashboard-content profile-page">
+          <div className="profile-layout">
+            <div className="profile-main">
+              <ProfileHeader onPreview={() => setPreviewing(true)} />
+
+              <p className="section-notice profile-notice" role="status">{notice && <><Check aria-hidden="true" />{notice}</>}</p>
+
+              <AboutSection profile={profile} />
+
+              <p className="profile-group-label">Professional &amp; qualifications</p>
+              {entriesStatus !== "ready" && (
+                <div className="dashboard-card" role={entriesStatus === "error" ? "alert" : "status"}>
+                  {entriesStatus === "error" ? <>Your profile sections couldn't be loaded. <Button variant="link" onClick={reload}>Try again</Button></> : "Loading your profile sections…"}
+                </div>
+              )}
+              {entriesStatus === "ready" && shown.map(section => section.id === "languages"
+                ? <LanguagesSection key={section.id} onEmptied={() => setRevealed(current => { const next = new Set(current); next.delete("languages"); return next })} />
+                : (
+                  <QualificationSection
+                    key={section.id}
+                    section={section}
+                    entries={entries[section.id] ?? []}
+                    editing={editor?.sectionId === section.id ? editor.entryId : undefined}
+                    busy={editor !== null}
+                    onAdd={() => openEditor(section.id, null)}
+                    onEdit={entryId => openEditor(section.id, entryId)}
+                    onDelete={entryId => setDeleting({ sectionId: section.id, entryId })}
+                    onCloseEditor={closeEditor}
+                  />
+                ))}
+
+              {entriesStatus === "ready" && offerMore && (
+                <section id="add-more" className="dashboard-card add-more" aria-labelledby="add-more-heading">
+                  <h2 id="add-more-heading">Add to your profile</h2>
+                  <p>Sections you haven't filled in yet. Add only what applies to you.</p>
+                  <div className="add-more-chips">
+                    {!showOutputs && (
+                      <button type="button" className="add-chip" disabled={editor !== null} onClick={revealOutputs}>
+                        <BookOpen aria-hidden="true" /><span>Research outputs</span><Plus aria-hidden="true" className="add-chip-plus" />
+                      </button>
+                    )}
+                    {hidden.map(section => {
+                      const Icon = section.icon
+                      return (
+                        <button key={section.id} type="button" className="add-chip" disabled={editor !== null}
+                          onClick={() => section.id === "languages"
+                            ? (setRevealed(current => new Set(current).add("languages")), requestAnimationFrame(() => scrollToSection("languages")))
+                            : openEditor(section.id, null)}>
+                          <Icon aria-hidden="true" /><span>{section.label}</span><Plus aria-hidden="true" className="add-chip-plus" />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </section>
+              )}
+
+              <p className="profile-group-label">Teaching &amp; research</p>
+              <TeachingSection />
+              <ResearchSection />
+              {showOutputs && <ResearchOutputsSection onEmptied={() => setRevealed(current => { const next = new Set(current); next.delete("outputs"); return next })} />}
+            </div>
+
+            <nav className="dashboard-card profile-contents" aria-label="On this page">
+              <p className="profile-contents-title">On this page</p>
+              <ul>
+                <ContentsLink id="general" label="General information" active={active} done={!!(profile.biography.en || profile.biography.ka || profile.photo_url)} />
+              </ul>
+              <p className="profile-contents-group">Professional &amp; qualifications</p>
+              <ul>
+                {shown.map(section => (
+                  <ContentsLink key={section.id} id={section.id} label={section.label} active={active} count={entries[section.id]?.length ?? 0} />
+                ))}
+                {offerMore && (
+                  <li>
+                    <button type="button" className="contents-add" aria-current={active === "add-more" ? "location" : undefined} onClick={() => scrollToSection("add-more")}>
+                      <Plus aria-hidden="true" /><span>Add {hidden.length + (showOutputs ? 0 : 1) === 1 ? "1 more section" : `${hidden.length + (showOutputs ? 0 : 1)} more sections`}</span>
+                    </button>
+                  </li>
+                )}
+              </ul>
+              <p className="profile-contents-group">Teaching &amp; research</p>
+              <ul>
+                <ContentsLink id="teaching" label="Teaching" active={active} />
+                <ContentsLink id="research" label="Research" active={active} />
+                {showOutputs && <ContentsLink id="outputs" label="Research outputs" active={active} count={outputs.outputs.length} />}
+              </ul>
+            </nav>
+          </div>
+
+          <PublicProfilePreview open={previewing} onClose={() => setPreviewing(false)} profile={profile} entries={entries} />
+
+          <AlertDialog.Root open={deleting !== null} onOpenChange={open => { if (!open) setDeleting(null) }}>
+            <AlertDialog.Portal>
+              <AlertDialog.Backdrop className="confirm-backdrop" />
+              <AlertDialog.Popup className="confirm-dialog">
+                <AlertDialog.Title className="confirm-title">Delete this entry?</AlertDialog.Title>
+                <AlertDialog.Description className="confirm-description">
+                  “{deletingSection && deletingEntry ? entryTitle(deletingSection, deletingEntry) : ""}” will be removed from your profile. This can't be undone.
+                </AlertDialog.Description>
+                <div className="confirm-actions">
+                  <AlertDialog.Close render={<Button variant="outline" className="dashboard-button" />}>Cancel</AlertDialog.Close>
+                  <Button className="dashboard-button danger-solid" onClick={confirmDelete}>Delete</Button>
+                </div>
+              </AlertDialog.Popup>
+            </AlertDialog.Portal>
+          </AlertDialog.Root>
+        </div>
+      )}
+    </WorkspaceLayout>
+  )
+}
+
+function ContentsLink({ id, label, active, count, done }: { id: string; label: string; active: string; count?: number; done?: boolean }) {
+  return (
+    <li>
+      <button type="button" aria-current={active === id ? "location" : undefined} onClick={() => scrollToSection(id)}>
+        {done !== undefined && (done ? <Check aria-label="Filled in" className="contents-done" /> : <CircleDashed aria-label="Not filled in yet" />)}
+        <span>{label}</span>
+        {count !== undefined && count > 0 && <span className="count-badge">{count}</span>}
+      </button>
+    </li>
+  )
+}
+
+/** Old addresses (/profile/general, /profile/qualifications/awards/new, ...) lead to the right place on the one page. */
+export function LegacyProfileRedirect({ to }: { to?: string }) {
+  const { sectionId, entryId } = useParams()
+  const { pathname } = useLocation()
+  const target = to ?? sectionId ?? "general"
+  const state: ProfileLinkState | undefined = entryId && sectionId
+    ? { edit: { sectionId, entryId } }
+    : sectionId && pathname.endsWith("/new") ? { add: sectionId } : undefined
+  return <Navigate to={`/profile#${target}`} replace state={state} />
+}

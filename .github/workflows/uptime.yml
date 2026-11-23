@@ -1,0 +1,48 @@
+# Checks the live site every 15 minutes from outside: the API answers, the security headers arrive, and the HTTPS
+# certificate has more than 14 days left. When a check fails, GitHub emails whoever last changed this file's schedule
+# (and the run shows red under Actions).
+# GitHub runs schedules only from the repository's default branch, and pauses them after 60 days without commits.
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SITE: https://pea.iliauni.edu.ge
+
+jobs:
+  check:
+    name: Live site
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: The API answers
+        run: |
+          # Three tries a minute apart, so one dropped connection doesn't raise an alarm
+          for attempt in 1 2 3; do
+            if curl -fsS --max-time 20 "$SITE/api/v1/health" | grep -q '"status":"ok"'; then exit 0; fi
+            sleep 60
+          done
+          echo "::error::$SITE/api/v1/health didn't answer OK three times in a row"
+          exit 1
+
+      - name: The security headers arrive
+        run: |
+          headers=$(curl -fsSI --max-time 20 "$SITE/people")
+          missing=0
+          for header in content-security-policy strict-transport-security x-content-type-options x-frame-options; do
+            if ! grep -qi "^$header:" <<< "$headers"; then echo "::error::Missing header: $header"; missing=1; fi
+          done
+          exit $missing
+
+      - name: The certificate is valid for 14 more days
+        run: |
+          host=${SITE#https://}
+          echo | openssl s_client -servername "$host" -connect "$host:443" 2>/dev/null \
+            | openssl x509 -noout -enddate -checkend $((14 * 24 * 3600)) \
+            || { echo "::error::The HTTPS certificate expires within 14 days: is Caddy renewing it?"; exit 1; }
