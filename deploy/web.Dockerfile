@@ -7,6 +7,6 @@ RUN bun install --frozen-lockfile
 COPY pea_masters_frontend/ ./
 RUN bun run build
 
-FROM caddy:2.10-alpine
+FROM caddy:2.11-alpine
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /src/dist /srv
