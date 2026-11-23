@@ -62,12 +62,16 @@ class Rule:
     limit: int  # requests...
     seconds: int  # ...per this many seconds
     message: str
+    # Counted per address even with a session cookie: before sign-in a cookie proves nothing, and a made-up one
+    # each time would otherwise dodge the limit. (The other rules' endpoints need a real session: made-up cookies
+    # are refused before any work is done.)
+    per_address: bool = False
 
 
 RULES = [
     Rule("sign-in", frozenset({"GET"}),
          re.compile(r"^/api/v1/(auth/google/(login|callback)|orcid/(connect|callback))$"),
-         30, 600, "Too many sign-in attempts"),
+         30, 600, "Too many sign-in attempts", per_address=True),
     Rule("uploads", frozenset({"POST", "PUT"}), re.compile(r"^/api/v1/me/(documents|profile/photo)$"),
          60, 600, "Too many uploads"),
     Rule("lookups", frozenset({"GET", "POST"}),
@@ -107,9 +111,9 @@ class Limiter:
 limiter = Limiter()
 
 
-def who_is(request: Request) -> str:
+def who_is(request: Request, per_address: bool = False) -> str:
     """The person's session if they're signed in (hashed: the token itself isn't kept), otherwise their address"""
-    token = request.cookies.get(COOKIE_NAME)
+    token = None if per_address else request.cookies.get(COOKIE_NAME)
     if token:
         return "session:" + hashlib.sha256(token.encode()).hexdigest()
     return "ip:" + (request.client.host if request.client else "unknown")
@@ -127,7 +131,7 @@ async def protect(request: Request, call_next):
             return problem_response(403, "cross_site", "This request came from another website, so PEA refused it.")
         for rule in RULES:
             if request.method in rule.methods and rule.path.search(path):
-                wait = limiter.check(rule, who_is(request))
+                wait = limiter.check(rule, who_is(request, rule.per_address))
                 if wait:
                     minutes = math.ceil(wait / 60)
                     return problem_response(

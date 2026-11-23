@@ -114,8 +114,11 @@ def load_people(db: Session, org_id: uuid.UUID, user_ids: list[uuid.UUID] | None
     if user_ids is not None:
         query = query.where(User.id.in_(user_ids))
     if search:
-        pattern = f"%{search.strip()}%"
-        query = query.where(or_(User.email.ilike(pattern), User.display_name.ilike(pattern)))
+        # % and _ are wildcards in LIKE: searched for as themselves, like any other character
+        term = search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{term}%"
+        query = query.where(or_(User.email.ilike(pattern, escape="\\"),
+                                User.display_name.ilike(pattern, escape="\\")))
     if visible_to_coordinator:
         query = query.where(User.id.in_(coordinated_members(visible_to_coordinator, org_id, include_inactive=True)))
     rows = db.execute(query).all()

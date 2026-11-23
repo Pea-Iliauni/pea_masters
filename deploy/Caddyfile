@@ -17,6 +17,17 @@
 
 	# The API (it sets its own Cache-Control: no-store)
 	handle /api/* {
+		# Nothing larger than 25 MB reaches the API: the biggest real request is a biography with images (about 12 MB).
+		# Without a limit, huge uploads would fill the disk or memory before the API's own size checks run.
+		# Browsers announce the size first (Content-Length), so those are refused at once, before anything is sent on;
+		# request_body catches the rare upload that doesn't say its size.
+		@too_large header_regexp Content-Length ^(2[5-9][0-9]{6}|[3-9][0-9]{7}|[0-9]{9,})$
+		respond @too_large "Request too large (at most 25 MB)" 413 {
+			close
+		}
+		request_body {
+			max_size 25MB
+		}
 		reverse_proxy api:8000
 	}
 

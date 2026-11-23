@@ -356,3 +356,16 @@ def test_google_name_changes_are_followed(as_admin, base, client, google_returns
     sign_in_with_google(client, google_returns, person["email"], "Nino", "Beridze")
     sign_in_with_google(client, google_returns, person["email"], "Nino", "Beridze-Lomidze")
     assert client.get("/api/v1/auth/me").json()["display_name"] == "Nino Beridze-Lomidze"
+
+
+def test_search_takes_percent_and_underscore_literally(as_admin, base):
+    register(as_admin, base, "nino_beridze@iliauni.edu.ge", name="Nino Beridze")
+    register(as_admin, base, "ninoberidze@iliauni.edu.ge", name="Nino Other")
+
+    def found(q):
+        return sorted(p["email"] for p in as_admin.get(f"{base}/people", params={"q": q}).json()["people"])
+
+    assert found("%") == []  # not "everyone"
+    assert found("_") == ["nino_beridze@iliauni.edu.ge"]  # the character itself, not "any one character"
+    assert found("nino_b") == ["nino_beridze@iliauni.edu.ge"]
+    assert {"nino_beridze@iliauni.edu.ge", "ninoberidze@iliauni.edu.ge"} <= set(found("NINO"))  # any case
