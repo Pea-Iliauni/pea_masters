@@ -41,7 +41,7 @@ def test_researchers_dont_get_the_administration_pages(admin_page: Page, organiz
     expect(sidebar.get_by_text("ADMINISTRATION")).to_have_count(0)
     expect(sidebar.get_by_role("button", name="Evaluation forms")).to_have_count(0)
     # Typing the address leads back to the dashboard
-    for address in ("/admin/evaluation-forms", "/admin/evaluation-forms/isu-self-assessment", "/admin/people"):
+    for address in ("/admin/evaluation-forms", "/admin/evaluation-forms/isu-self-assessment", "/admin/people/import"):
         page.goto(address)
         expect(page).to_have_url(re.compile(r"/home$"))
 

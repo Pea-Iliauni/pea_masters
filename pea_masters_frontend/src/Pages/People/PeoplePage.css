@@ -114,3 +114,33 @@
 .import-deactivate { text-align: center; }
 .import-deactivate .form-checkbox { margin-top: 10px; }
 .import-fixed-role { padding-top: 8px; font-size: 13px; line-height: 20px; color: var(--color-neutral-600); }
+
+/* People: names open the person's page */
+.person-link { color: inherit; text-decoration: none; border-radius: var(--radius-md); }
+.person-link:hover .person-link-name { color: var(--color-brand-700, var(--primary)); text-decoration: underline; text-underline-offset: 3px; }
+.person-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.person-link-name { font-weight: 500; }
+.people-count { font-size: 13px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.people-table[data-compact] { min-width: 640px; }
+.people-filters .people-search { order: 4; }
+
+/* A person's page (PersonPage.tsx) */
+.person-page-actions { justify-content: flex-start; }
+.person-private-note { display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px; border-radius: var(--radius-lg); background: var(--muted); font-size: 13px; line-height: 20px; color: var(--color-neutral-700); }
+.person-private-note svg, .person-private-message svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; }
+.person-private { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; }
+.person-private > div:last-child { display: flex; flex-direction: column; gap: 8px; flex: 1 1 280px; min-width: 0; }
+.person-private h1 { font-size: 22px; line-height: 30px; font-weight: 600; }
+.person-private-message { display: flex; gap: 8px; margin-top: 4px; padding: 12px 14px; border-radius: var(--radius-lg); background: var(--muted); font-size: 14px; line-height: 22px; color: var(--color-neutral-700); }
+
+/* Add people: a row fixed while only the rows that need fixing are shown stays, marked as fixed */
+.import-table tr[data-fixed] td { background: color-mix(in srgb, var(--success-soft) 55%, transparent); }
+.import-table tr[data-fixed] td:first-child { box-shadow: inset 3px 0 0 var(--success); }
+.import-summary-fixed { display: inline-flex; align-items: center; gap: 6px; color: var(--success); font-weight: 500; }
+.import-summary-fixed svg { width: 14px; height: 14px; }
+
+/* A person's public CV under their profile (the CV builder's own document styles) */
+.person-cv { display: flex; flex-direction: column; gap: 12px; }
+.person-cv h2 { display: flex; align-items: center; gap: 8px; font-size: 18px; line-height: 26px; font-weight: 600; }
+.person-cv h2 svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+.person-cv-paper { max-height: none; }

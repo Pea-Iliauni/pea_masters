@@ -22,6 +22,8 @@ export type PublicProfileData = {
   qualifications: { section: SectionDef; entries: Entry[] }[]
   teaching: { interests: string[]; programmes: { id: string; name: string; level: string; year: string }[] }
   research: ResearchOverview
+  /** Publications, datasets and software, already written as citations (a person's page; not in the preview) */
+  outputs?: { id: string; kind: string; citation: string; link: string | null }[]
 }
 
 const period = (start: string, end: string) => `${start} - ${end || "present"}`
@@ -34,7 +36,8 @@ export function PublicProfile({ data }: { data: PublicProfileData }) {
   const { teaching, research } = data
   const hasTeaching = teaching.interests.length > 0 || teaching.programmes.length > 0
   const hasResearch = research.interests.length > 0 || research.projects.length > 0 || research.collaborations.length > 0 || research.organisations.length > 0
-  const empty = !data.biography && data.qualifications.length === 0 && !hasTeaching && !hasResearch
+  const outputs = data.outputs ?? []
+  const empty = !data.biography && data.qualifications.length === 0 && !hasTeaching && !hasResearch && outputs.length === 0
 
   return (
     <article className="public-profile" aria-label={`Profile of ${data.name}`}>
@@ -99,6 +102,23 @@ export function PublicProfile({ data }: { data: PublicProfileData }) {
               </ul>
             </>
           )}
+        </section>
+      )}
+
+      {outputs.length > 0 && (
+        <section className="public-profile-section" aria-labelledby="public-outputs">
+          <h3 id="public-outputs">Research outputs</h3>
+          <ul className="public-profile-list">
+            {outputs.map(output => (
+              <li key={output.id}>
+                <span>{output.citation}</span>
+                <small>
+                  {output.kind}
+                  {output.link && <> · <a href={output.link} target="_blank" rel="noopener noreferrer">{output.link.replace(/^https?:\/\//, "")}</a></>}
+                </small>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

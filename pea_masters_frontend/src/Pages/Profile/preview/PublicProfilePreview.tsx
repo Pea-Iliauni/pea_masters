@@ -29,10 +29,11 @@ export function PublicProfilePreview({ open, onClose, profile, entries }: Props)
     return {
       name: identity.fullName,
       initials: identity.initials,
-      photo: profile.photo_url,
+      // What colleagues see: no photo or email when the person hides them (Settings → Privacy)
+      photo: profile.show_photo ? profile.photo_url : null,
       place: [identity.position, identity.department, identity.faculty].filter(Boolean),
       organization: identity.organization,
-      email: identity.email,
+      email: profile.show_email ? identity.email : "",
       biography: lang ? { html: profile.biography[lang]!, lang } : null,
       qualifications: profileSections
         .map(section => ({ section, entries: entries[section.id] ?? [] }))

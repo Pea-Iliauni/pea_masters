@@ -55,15 +55,21 @@ export function ImportPeoplePage() {
   const [rows, setRows] = useState<ImportRow[]>(() => [blankRow()])
   const [stage, setStage] = useState<Stage>({ kind: "editing" })
   const [showAll, setShowAll] = useState(false)
-  const [onlyProblems, setOnlyProblems] = useState(false)
+  // "Show only rows that need fixing": the rows that needed fixing when it was turned on. They stay on screen while
+  // they're being fixed (a single Backspace can fix a row; it mustn't vanish under the cursor) until it's turned off
+  // or the list is checked again.
+  const [focus, setFocus] = useState<Set<string> | null>(null)
+  const onlyProblems = focus !== null
   const [message, setMessage] = useState<{ tone: "error" | "info"; text: string } | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
+  // Until the server answers, the session's roles decide, so the page starts in the right view
+  const sessionAdmin = Boolean(session && org && (session.isRoot || org.roles.includes("admin")))
   const importer: Importer = useMemo(() => ({
-    canManageRoles: access?.canManageRoles ?? false,
+    canManageRoles: access?.canManageRoles ?? sessionAdmin,
     coordinated: org?.coordinates.map(unit => unit.id) ?? [],
     email: session?.email ?? "",
-  }), [access, org, session])
+  }), [access, sessionAdmin, org, session])
 
   useEffect(() => {
     if (!org) return
@@ -110,6 +116,7 @@ export function ImportPeoplePage() {
 
   function addRow() {
     if (rows.length >= IMPORT_LIMIT) return
+    setFocus(null)
     setRows(current => [...current, blankRow(units, importer)])
     // Focus the new row's email once it's on the page
     requestAnimationFrame(() => {
@@ -141,14 +148,17 @@ export function ImportPeoplePage() {
   function showServerVerdicts(results: { message: string | null }[]) {
     const verdicts = new Map(filled.map((row, index) => [row.key, results[index]?.message ?? null]))
     setRows(current => current.map(row => (verdicts.has(row.key) ? { ...row, serverError: verdicts.get(row.key) ?? null } : row)))
-    setOnlyProblems(true)
+    setFocus(new Set([...verdicts].filter(([, verdict]) => verdict).map(([key]) => key)))
   }
+
+  /** Shows only the rows that need fixing now */
+  const focusOnProblems = () => setFocus(new Set(filled.filter(row => problems.has(row.key)).map(row => row.key)))
 
   async function check() {
     if (!org || filled.length === 0) return
     setMessage(null)
     if (problemCount > 0) {
-      setOnlyProblems(true)
+      focusOnProblems()
       setMessage({ tone: "error", text: `${problemCount} ${problemCount === 1 ? "row needs" : "rows need"} fixing first. They're shown below.` })
       return
     }
@@ -188,7 +198,7 @@ export function ImportPeoplePage() {
     }
   }
 
-  const breadcrumb = [{ label: "People", to: "/admin/people" }, { label: "Add several people" }]
+  const breadcrumb = [{ label: "People", to: "/people" }, { label: "Add people" }]
   const busy = stage.kind === "checking" || stage.kind === "saving"
 
   if (!session || !org || access?.canRegister === false) {
@@ -196,8 +206,8 @@ export function ImportPeoplePage() {
       <WorkspaceLayout breadcrumb={breadcrumb}>
         {() => (
           <div className="dashboard-content">
-            <div className="page-heading"><div><h1>Add several people</h1></div></div>
-            <div className="dashboard-card"><p>Only Admins and Coordinators can register people from a list. <Link to="/admin/people">Back to People</Link></p></div>
+            <div className="page-heading"><div><h1>Add people</h1></div></div>
+            <div className="dashboard-card"><p>Only Admins can add or deactivate people. <Link to="/people">Back to People</Link></p></div>
           </div>
         )}
       </WorkspaceLayout>
@@ -205,7 +215,7 @@ export function ImportPeoplePage() {
   }
 
   // Long lists: show the first 100 rows until asked for all (rendering 1000 rows of inputs at once is slow)
-  const visible = rows.filter(row => !onlyProblems || problems.has(row.key))
+  const visible = focus ? rows.filter(row => focus.has(row.key)) : rows
   const shown = showAll ? visible : visible.slice(0, 100)
 
   return (
@@ -214,16 +224,14 @@ export function ImportPeoplePage() {
         <div className="dashboard-content">
           <div className="page-heading">
             <div>
-              <h1>Add several people</h1>
+              <h1>Add people</h1>
               <p>
-                {importer.canManageRoles
-                  ? "Register people, or deactivate people already registered, several at a time. Type them in or fill the list from an Excel file."
-                  : "Register Researchers in your department, or deactivate your Researchers, several at a time. Type them in or fill the list from an Excel file."}
-                {" "}Nothing is saved until every row is correct and you confirm.
+                Register people, or deactivate people already registered: one or many at a time. Type them in or fill the list
+                from an Excel file. Nothing is saved until every row is correct and you confirm.
               </p>
             </div>
             <div className="page-actions">
-              <Button variant="outline" className="dashboard-button" onClick={() => navigate("/admin/people")}><ArrowLeft />People</Button>
+              <Button variant="outline" className="dashboard-button" onClick={() => navigate("/people")}><ArrowLeft />People</Button>
             </div>
           </div>
 
@@ -243,8 +251,8 @@ export function ImportPeoplePage() {
                 </p>
               </div>
               <div className="import-done-actions">
-                <Button className="dashboard-button" onClick={() => navigate("/admin/people")}>Back to People</Button>
-                <Button variant="outline" className="dashboard-button" onClick={() => { setRows([blankRow(units, importer)]); setStage({ kind: "editing" }); setOnlyProblems(false) }}>Start a new list</Button>
+                <Button className="dashboard-button" onClick={() => navigate("/people")}>Back to People</Button>
+                <Button variant="outline" className="dashboard-button" onClick={() => { setRows([blankRow(units, importer)]); setStage({ kind: "editing" }); setFocus(null) }}>Start a new list</Button>
               </div>
             </section>
           ) : (
@@ -274,9 +282,10 @@ export function ImportPeoplePage() {
               <div className="import-summary">
                 <span>{counts.add} to register{counts.deactivate > 0 && `, ${counts.deactivate} to deactivate`}</span>
                 {problemCount > 0 && <span className="import-summary-problems">{problemCount} {problemCount === 1 ? "row needs" : "rows need"} fixing</span>}
+                {onlyProblems && problemCount === 0 && <span className="import-summary-fixed"><Check aria-hidden="true" />All fixed. Untick the filter to see the whole list.</span>}
                 {(problemCount > 0 || onlyProblems) && (
                   <label className="import-filter">
-                    <input type="checkbox" className="form-checkbox" checked={onlyProblems} onChange={event => setOnlyProblems(event.target.checked)} />
+                    <input type="checkbox" className="form-checkbox" checked={onlyProblems} onChange={event => (event.target.checked ? focusOnProblems() : setFocus(null))} />
                     Show only rows that need fixing
                   </label>
                 )}
@@ -307,7 +316,8 @@ export function ImportPeoplePage() {
                       const departments = groups.filter(group => !row.facultyId || group.faculty?.id === row.facultyId)
                       const off = busy || row.deactivate // only the email matters when deactivating
                       return (
-                        <tr key={row.key} data-problem={Object.keys(found).length > 0 || undefined} data-deactivate={row.deactivate || undefined}>
+                        <tr key={row.key} data-problem={Object.keys(found).length > 0 || undefined} data-deactivate={row.deactivate || undefined}
+                          data-fixed={(onlyProblems && Object.keys(found).length === 0) || undefined}>
                           <td className="import-number" title={label}>{row.sheetRow ?? index + 1}</td>
                           <td>
                             <input className="form-control" type="email" autoComplete="off" value={row.email} disabled={busy}
@@ -356,7 +366,7 @@ export function ImportPeoplePage() {
                             {row.deactivate ? null : importer.canManageRoles ? (
                               <fieldset className="import-roles" aria-label={`Roles, ${label}`} {...invalid("roles")}>
                                 {ROLE_OPTIONS.map(option => (
-                                  <label key={option.role} title={option.role === "coordinator" ? "Coordinates their department: registers and manages its Researchers" : undefined}>
+                                  <label key={option.role} title={option.role === "coordinator" ? "Coordinates their department: sends and reviews its Researchers' evaluations" : undefined}>
                                     <input type="checkbox" className="form-checkbox" disabled={busy} checked={row.roles.includes(option.role)}
                                       onChange={event => update(row.key, {
                                         roleText: "",

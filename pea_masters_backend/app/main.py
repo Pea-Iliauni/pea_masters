@@ -13,6 +13,7 @@ from app import (
     notifications,
     orcid,
     people,
+    person_pages,
     positions,
     profile_entries,
     profiles,
@@ -57,6 +58,7 @@ app.include_router(units.router)
 app.include_router(people.router)
 app.include_router(positions.router)
 app.include_router(profiles.router)
+app.include_router(person_pages.router)
 app.include_router(profile_entries.router)
 app.include_router(cv.router)
 app.include_router(evaluations.router)

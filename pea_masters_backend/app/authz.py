@@ -33,9 +33,11 @@ from app.models import (
 
 
 class Action(StrEnum):
-    VIEW_PEOPLE = "people.view"
+    VIEW_DIRECTORY = "people.directory"  # the People page and people's profiles (private ones only to reviewers)
+    VIEW_PEOPLE = "people.view"  # everything about a person, for those who review them
     REGISTER_PEOPLE = "people.register"
-    EDIT_PEOPLE = "people.edit"  # change name, deactivate, reactivate
+    EDIT_PEOPLE = "people.edit"  # correct a name
+    DEACTIVATE_PEOPLE = "people.deactivate"  # deactivate and reactivate
     MANAGE_ROLES = "people.roles"  # change roles, move to another department
     VIEW_UNITS = "units.view"
     MANAGE_UNITS = "units.manage"  # faculties and departments
@@ -53,9 +55,11 @@ class Action(StrEnum):
 # Roles: admin = the organization's responsible person; coordinator = coordinates a department;
 # member = Researcher. Coordinators act only on Researchers of their own department (see people.py).
 POLICY: dict[Action, frozenset[str]] = {
+    Action.VIEW_DIRECTORY: frozenset({"admin", "coordinator", "member"}),
     Action.VIEW_PEOPLE: frozenset({"admin", "coordinator"}),
-    Action.REGISTER_PEOPLE: frozenset({"admin", "coordinator"}),
+    Action.REGISTER_PEOPLE: frozenset({"admin"}),
     Action.EDIT_PEOPLE: frozenset({"admin", "coordinator"}),
+    Action.DEACTIVATE_PEOPLE: frozenset({"admin"}),
     Action.MANAGE_ROLES: frozenset({"admin"}),
     Action.VIEW_UNITS: frozenset({"admin", "coordinator", "member"}),
     Action.MANAGE_UNITS: frozenset({"admin"}),

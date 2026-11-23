@@ -35,6 +35,11 @@ export type MyProfile = {
   /** The ORCID iD was proven by signing in to ORCID ("Connect ORCID") */
   orcid_verified: boolean
   affiliations: ProfileAffiliation[]
+  /** False: only the person, their organization's Admins and their Coordinator see the profile */
+  is_public: boolean
+  /** False: colleagues don't see the email address or the photo (the person's reviewers still do) */
+  show_email: boolean
+  show_photo: boolean
   updated_at: string | null
 }
 
@@ -117,6 +122,16 @@ export async function saveBiography(biography: Partial<Record<"en" | "ka", strin
 /** Sets the given identifiers; an empty string removes one. Throws ApiError (422) when one is invalid. */
 export async function saveIdentifiers(identifiers: Partial<Identifiers>) {
   return saved(await api<MyProfile>("/me/profile/identifiers", { method: "PUT", body: identifiers }))
+}
+
+export type VisibilityChange = Partial<Pick<MyProfile, "is_public" | "show_email" | "show_photo">>
+
+/**
+ * Who sees the profile. is_public: everyone at the university who uses PEA (false: only those who review the person).
+ * show_email / show_photo: whether colleagues see them. Only the settings given are changed.
+ */
+export async function saveVisibility(change: VisibilityChange) {
+  return saved(await api<MyProfile>("/me/profile/visibility", { method: "PUT", body: change }))
 }
 
 /** Keeps the ORCID iD but no longer marks it as proven, so it can be changed */

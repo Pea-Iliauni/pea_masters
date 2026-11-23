@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router"
-import { CalendarPlus, Check, ClipboardCheck, LockOpen, Send, Undo2, Users, X } from "lucide-react"
+import { CalendarPlus, Check, CheckCheck, ClipboardCheck, LockOpen, Send, Undo2, Users, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { FilterMenu } from "@/components/forms/FilterMenu"
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout"
 import { ApiError } from "@/lib/api"
 import { peopleOrganizations, useSession } from "@/lib/auth"
 import { exceptionsApi, formsApi, periodsApi, sendingApi, type EvaluationBrief, type EvaluationPeriod, type FormSummary, type RosterRow, type SendResult } from "@/lib/evaluations"
 import { useLanguage } from "@/lib/language-context"
-import { localName } from "@/lib/people"
+import { inUnits, localName, structureApi, unitFilterOptions, type Unit } from "@/lib/people"
 import { ConfirmSheet } from "@/Pages/People/ConfirmSheet"
 import { DeadlineSheet } from "./DeadlineSheet"
 import "@/components/forms/forms.css"
@@ -65,6 +66,10 @@ export function SendEvaluationsPage() {
   const [reopening, setReopening] = useState<RosterRow | null>(null)
   const [notice, setNotice] = useState("")
   const noticeTimer = useRef<number | undefined>(undefined)
+  /** Departments and faculties: ticking some and "Select everyone shown" sends to whole departments */
+  const [units, setUnits] = useState<Unit[]>([])
+  const [unitFilter, setUnitFilter] = useState<Set<string>>(new Set())
+  const unitOptions = useMemo(() => unitFilterOptions(units, language), [units, language])
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 
   const announce = (message: string) => {
@@ -77,10 +82,11 @@ export function SendEvaluationsPage() {
   useEffect(() => {
     if (!org) return
     let cancelled = false
-    void Promise.all([periodsApi.list(org.id), formsApi.list(org.id)]).then(([periodList, formList]) => {
+    void Promise.all([periodsApi.list(org.id), formsApi.list(org.id), structureApi.list(org.id)]).then(([periodList, formList, structure]) => {
       if (cancelled) return
       setPeriods(periodList)
       setForms(formList)
+      setUnits(structure)
       setPeriodId(current => periodList.some(p => p.id === current) ? current : (periodList.find(p => p.status === "open") ?? periodList[0])?.id ?? "")
       setError("")
     }).catch(cause => { if (!cancelled) setError(cause instanceof ApiError ? cause.message : "The evaluation periods couldn't be loaded.") })
@@ -104,9 +110,13 @@ export function SendEvaluationsPage() {
   const period = periods?.find(p => p.id === periodId)
   const closed = period?.status === "closed"
   const isAdmin = session?.isRoot || org.roles.includes("admin")
-  const rows = roster ?? []
+  const everyone = roster ?? []
+  const rows = everyone.filter(row => inUnits(row.person, unitFilter))
   const choosable = rows.filter(sendable)
   const allChosen = choosable.length > 0 && choosable.every(row => selected.has(row.person.id))
+  const hiddenChosen = [...selected].filter(id => !rows.some(row => row.person.id === id)).length
+  const chooseShown = () => setSelected(current => new Set([...current, ...choosable.map(row => row.person.id)]))
+  const unchooseShown = () => setSelected(current => new Set([...current].filter(id => !choosable.some(row => row.person.id === id))))
   const counts = {
     notSent: rows.filter(row => !row.evaluation).length,
     submitted: rows.filter(row => row.evaluation?.submitted_at).length,
@@ -146,7 +156,7 @@ export function SendEvaluationsPage() {
             <section className="dashboard-card">
               <h2 className="send-empty-title">No evaluation periods yet</h2>
               <p className="send-muted">Forms are sent for an evaluation period, which an Admin sets up under People → Evaluation periods.</p>
-              {isAdmin && <Button variant="outline" className="dashboard-button send-empty-action" onClick={() => navigate("/admin/people")}>Set up a period</Button>}
+              {isAdmin && <Button variant="outline" className="dashboard-button send-empty-action" onClick={() => navigate("/people")}>Set up a period</Button>}
             </section>
           )}
 
@@ -169,14 +179,25 @@ export function SendEvaluationsPage() {
               </div>
               {closed && <p className="send-note">This period's deadline has passed, so no more forms can be sent for it.</p>}
 
+              {roster !== null && everyone.length > 0 && (
+                <div className="send-filters">
+                  <FilterMenu label="Departments" allLabel="All faculties and departments" options={unitOptions} selected={unitFilter} onChange={setUnitFilter} />
+                  <Button variant="outline" className="dashboard-button" disabled={closed || choosable.length === 0 || allChosen} onClick={chooseShown}>
+                    <CheckCheck />{unitFilter.size ? `Select everyone in ${unitFilter.size === 1 ? "this department" : "these departments"} (${choosable.length})` : `Select everyone (${choosable.length})`}
+                  </Button>
+                  {selected.size > 0 && <Button variant="link" className="send-clear" onClick={() => setSelected(new Set())}>Clear selection</Button>}
+                  {hiddenChosen > 0 && <span className="send-muted">{hiddenChosen} selected in other departments</span>}
+                </div>
+              )}
+
               {roster === null ? <p role="status">Loading the researchers…</p> : (
                 <div className="data-table-wrap">
                   <table className="data-table send-table">
                     <thead>
                       <tr>
                         <th scope="col" className="send-check">
-                          <input type="checkbox" aria-label="Select everyone who can be sent a form" checked={allChosen} disabled={closed || choosable.length === 0}
-                            onChange={() => setSelected(allChosen ? new Set() : new Set(choosable.map(row => row.person.id)))} />
+                          <input type="checkbox" aria-label="Select everyone shown who can be sent a form" checked={allChosen} disabled={closed || choosable.length === 0}
+                            onChange={() => (allChosen ? unchooseShown() : chooseShown())} />
                         </th>
                         <th scope="col">Researcher</th><th scope="col">Department</th><th scope="col">Form</th><th scope="col">Status</th><th scope="col">Entries</th>
                         <th scope="col"><span className="sr-only">Actions</span></th>
@@ -184,7 +205,7 @@ export function SendEvaluationsPage() {
                     </thead>
                     <tbody>
                       {rows.length === 0
-                        ? <tr><td colSpan={7} className="data-table-empty"><Users aria-hidden="true" /> {isAdmin ? "No researchers in the organization yet." : "No researchers in your department yet."}</td></tr>
+                        ? <tr><td colSpan={7} className="data-table-empty"><Users aria-hidden="true" /> {everyone.length > 0 ? "No researchers in the departments chosen." : isAdmin ? "No researchers in the organization yet." : "No researchers in your department yet."}</td></tr>
                         : rows.map(row => {
                           const state = progress(row.evaluation)
                           const name = row.person.display_name
@@ -240,7 +261,7 @@ export function SendEvaluationsPage() {
             <SendSheet
               period={period}
               forms={forms}
-              people={rows.filter(row => selected.has(row.person.id))}
+              people={everyone.filter(row => selected.has(row.person.id))}
               onSend={async formId => {
                 const result = await sendingApi.send(org.id, period.id, formId, [...selected])
                 setSending(false)

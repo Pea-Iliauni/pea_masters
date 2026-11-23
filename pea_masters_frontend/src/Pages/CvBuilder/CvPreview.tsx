@@ -103,7 +103,7 @@ export function CvPreview({ cv, sections, person, asVisitor }: Props) {
         )}
       </header>
       {sections.length === 0
-        ? <p className="cv-empty">Turn on a few sections in “Sections &amp; layout” to fill your CV.</p>
+        ? <p className="cv-empty">{asVisitor ? "There's nothing in this CV yet." : <>Turn on a few sections in “Sections &amp; layout” to fill your CV.</>}</p>
         : sections.map(section => <Section key={section.id} section={section} cv={cv} />)}
     </article>
   )

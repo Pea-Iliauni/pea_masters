@@ -72,7 +72,17 @@ class ProfileOut(BaseModel):
     identifiers: Identifiers
     orcid_verified: bool  # the ORCID iD was proven by signing in to ORCID
     affiliations: list[AffiliationOut]  # one per organization the person is an active member of
+    is_public: bool  # false: only the person, their organization's Admins and their Coordinator see the profile
+    show_email: bool  # false: colleagues don't see the email address (reviewers do)
+    show_photo: bool  # false: colleagues see initials instead of the photo (reviewers see it)
     updated_at: datetime | None
+
+
+class VisibilityIn(BaseModel):
+    """Only the settings sent are changed"""
+    is_public: bool | None = None
+    show_email: bool | None = None
+    show_photo: bool | None = None
 
 
 class BiographyIn(BaseModel):
@@ -139,7 +149,9 @@ def build_profile(db: Session, user: User) -> ProfileOut:
         photo_url=photo_url(profile.photo_file_id) if profile else None,
         identifiers=Identifiers.model_construct(**(profile.identifiers if profile else {})),
         orcid_verified=bool(profile and profile.orcid_verified_at),
-        affiliations=affiliations, updated_at=profile.updated_at if profile else None,
+        affiliations=affiliations, is_public=profile.is_public if profile else True,
+        show_email=profile.show_email if profile else True, show_photo=profile.show_photo if profile else True,
+        updated_at=profile.updated_at if profile else None,
     )
 
 
@@ -188,6 +200,24 @@ def update_my_profile(body: BiographyIn, request: Request, user: User = Depends(
                  after={lang: text_length(html) for lang, html in biography.items()},  # lengths, not the text
                  ip=client_ip(request))
     db.commit()
+    return build_profile(db, user)
+
+
+@router.put("/api/v1/me/profile/visibility", response_model=ProfileOut)
+def set_my_visibility(body: VisibilityIn, request: Request, user: User = Depends(current_user),
+                      db: Session = Depends(get_db)):
+    """Public: everyone at the university who uses PEA can open the profile from the People page. Private: only the
+    person, their organization's Admins and their Coordinator (who review them); others see that it's private.
+    Email and photo: whether colleagues see them on the People page and the profile; reviewers always do."""
+    profile = profile_of(db, user.id)
+    wanted = body.model_dump(exclude_none=True)
+    changed = {key: value for key, value in wanted.items() if getattr(profile, key) != value}
+    if changed:
+        for key, value in changed.items():
+            setattr(profile, key, value)
+        audit.record(db, "profile.visibility_changed", entity_type="profile", entity_id=user.id,
+                     actor_user_id=user.id, after=changed, ip=client_ip(request))
+        db.commit()
     return build_profile(db, user)
 
 
@@ -306,9 +336,10 @@ def person_profile(org_id: uuid.UUID, user_id: uuid.UUID, actor: Actor = Depends
 
 @router.get("/api/v1/files/{file_id}", response_class=FileResponse)
 def get_file(file_id: uuid.UUID, actor: Actor = Depends(get_actor), db: Session = Depends(get_db)):
-    """Serves an uploaded file to its owner and Root. Photos also to anyone sharing an organization with the owner;
+    """Serves an uploaded file to its owner and Root. Photos also to anyone sharing an organization with the owner
+    (unless the owner hides their photo: then only to those who review them);
     supporting documents only to those who review the owner: Admins of their organization and their
-    department."""
+    Coordinator."""
     file = db.get(File, file_id)
     if file is None or file.deleted_at is not None:
         raise problem(status.HTTP_404_NOT_FOUND, "not_found", "File not found.")
@@ -321,7 +352,14 @@ def get_file(file_id: uuid.UUID, actor: Actor = Depends(get_actor), db: Session 
                 and file.owner_user_id in set(db.scalars(coordinated_members(actor.user.id, org))))
                 for org in owner_orgs)
         else:
-            allowed = bool(owner_orgs & set(actor.roles))
+            shared = owner_orgs & set(actor.roles)
+            owner_profile = db.get(Profile, file.owner_user_id)
+            allowed = bool(shared) and (
+                owner_profile is None or owner_profile.show_photo or owner_profile.photo_file_id != file.id
+                or any("admin" in actor.roles_in(org) or (
+                    "coordinator" in actor.roles_in(org)
+                    and file.owner_user_id in set(db.scalars(coordinated_members(actor.user.id, org))))
+                    for org in shared))
         if not allowed:
             raise problem(status.HTTP_404_NOT_FOUND, "not_found", "File not found.")  # don't reveal it exists
     return FileResponse(

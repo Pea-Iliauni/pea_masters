@@ -33,12 +33,13 @@ const navigation: NavItem[] = [
   { label: "My profile", icon: "imgIconUser", to: "/profile" },
   { label: "Evaluation form", icon: "imgIconFile", to: "/evaluation-form" },
   { label: "CV builder", icon: "imgIconBook", to: "/cv-builder" },
+  // Everyone: colleagues and their profiles. Admins also manage people there.
+  { label: "People", icon: "imgIconUser1", to: "/people" },
   { label: "Settings", icon: "imgIconSettings", to: "/settings" },
 ]
 
 /** Shown to Admins and Coordinators only. The backend enforces the same rule. */
 const administration: NavItem[] = [
-  { label: "People", icon: "imgIconUser1", to: "/admin/people" },
   { label: "Evaluations", icon: "imgIconCheck", to: "/admin/evaluations" },
   { label: "Evaluation forms", icon: "imgIconFile2", to: "/admin/evaluation-forms" },
 ]

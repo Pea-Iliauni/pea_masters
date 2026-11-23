@@ -97,7 +97,7 @@ class CvData(Part):
     version: Literal[1] = 1
     visibility: Literal["private", "public"] = "private"
     publicFields: PublicFields = Field(default_factory=PublicFields)  # noqa: N815
-    template: Literal["classic", "modern", "compact"] = "classic"
+    template: Literal["classic", "modern", "compact", "sidebar", "timeline", "minimal", "banner"] = "classic"
     citationStyle: Literal["APA", "IEEE", "Harvard"] = "APA"  # noqa: N815
     sections: list[Section] = Field(default_factory=list, max_length=20)
     personal: Personal = Field(default_factory=Personal)
