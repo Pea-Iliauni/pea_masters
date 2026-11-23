@@ -87,8 +87,46 @@ night at 03:15, run `crontab -e` and add:
 15 3 * * * $HOME/pea_masters/deploy/backup.sh >> /var/backups/pea/backup.log 2>&1
 ```
 
-These copies are on the same disk as the data. They help after a mistake, not after the server is lost, so ask IT
-where an off-server copy should go.
+Each run also checks the audit log (`scripts/verify_audit.py`) and writes a line like `Audit log intact: 512 entries;
+newest #530 … hash …` to `backup.log`. If it ever says **THE AUDIT LOG IS BROKEN**, someone changed or removed audit
+entries directly in the database: keep the backups from before that day, and compare with them
+(`./deploy/restore-test.sh` with an older dump shows its counts).
+
+### Off-server, encrypted copies
+
+The copies above are on the same disk as the data: they help after a mistake, not after the server is lost. With two
+settings in `deploy/.env`, every backup is also encrypted and sent elsewhere (for example a backup server from IT):
+
+1. On **your own computer** (not the server), make a key pair for the backups and keep its private part safe
+   (a password manager, plus a printed or offline copy): whoever holds it can read the backups.
+   ```bash
+   gpg --quick-generate-key "PEA backups" rsa4096 encrypt never
+   gpg --armor --export "PEA backups" > pea-backups-public.asc
+   ```
+2. On the server, import the **public** part: `gpg --import pea-backups-public.asc`.
+3. Give the server an SSH key that may write to the backup destination (`ssh-keygen -t ed25519`, then ask IT to add
+   `~/.ssh/id_ed25519.pub` there), and check `ssh backup-user@backup-host` works.
+4. Add to `deploy/.env`:
+   ```
+   BACKUP_GPG_RECIPIENT=PEA backups
+   BACKUP_REMOTE=backup-user@backup-host:/path/for/pea
+   ```
+5. Run `./deploy/backup.sh` once and check its last lines say `Sent 2 encrypted files`.
+
+The server never holds the private key, so a break-in there can't read the off-server copies. To read one, on the
+computer with the private key: `gpg --output pea-….dump --decrypt pea-….dump.gpg`. Without `BACKUP_GPG_RECIPIENT`,
+`backup.sh` refuses to send anything off the server.
+
+### Proving a backup restores
+
+A backup that has never been restored isn't proven. Once a month:
+
+```bash
+~/pea_masters/deploy/restore-test.sh
+```
+
+It loads the newest backup into a throwaway database (its own container, with no network), compares it with the live
+database, checks the files archive, and removes it all. The live data isn't touched.
 
 To restore a backup (this replaces the current data):
 
