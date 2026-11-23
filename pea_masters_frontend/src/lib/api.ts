@@ -24,6 +24,7 @@ function toError(status: number, detail: Detail): ApiError {
   }
   if (status === 401) return new ApiError(status, "signed_out", "Your session has ended. Please sign in again.")
   if (status === 403) return new ApiError(status, "forbidden", "You don't have permission to do this.")
+  if (status === 413) return new ApiError(status, "too_large", "That's too large to send. Use a smaller file (at most 10 MB) and try again.")
   if (status >= 500) return new ApiError(status, "server", "The server had a problem. Please try again.")
   return new ApiError(status, "error", "Something went wrong. Please try again.")
 }

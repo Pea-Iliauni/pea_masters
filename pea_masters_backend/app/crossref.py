@@ -6,6 +6,7 @@ address, never a person's) puts PEA in Crossref's faster "polite" pool."""
 import logging
 from datetime import datetime, timedelta
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, Query, status
@@ -48,7 +49,9 @@ def user_agent() -> str:
 
 def fetch_work(doi: str) -> dict[str, Any] | None:
     """Crossref's record for the DOI, or None when it isn't registered. Raises on any other failure."""
-    response = httpx.get(f"{settings.crossref_url}/works/{doi}", timeout=TIMEOUT,
+    # Encoded as one path segment (Crossref accepts it), so characters a DOI may contain ("/", "?", "#", "..")
+    # can never point the request at another of Crossref's addresses
+    response = httpx.get(f"{settings.crossref_url}/works/{quote(doi, safe='')}", timeout=TIMEOUT,
                          headers={"User-Agent": user_agent(), "Accept": "application/json"})
     if response.status_code == 404:
         return None

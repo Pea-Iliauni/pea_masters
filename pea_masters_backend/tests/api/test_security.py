@@ -89,3 +89,12 @@ def test_the_window_slides():
     assert window.check(one, "x", now=float(one.limit)) > 0
     assert window.check(one, "x", now=one.seconds + 0.5) == 0  # the oldest request has left the window
     limiter.reset()
+
+
+def test_made_up_cookies_dont_get_around_the_sign_in_limit(client):
+    sign_in = rule("sign-in")
+    for n in range(sign_in.limit):
+        client.cookies.set("pea_session", f"made-up-{n}")
+        assert client.get("/api/v1/auth/google/login", follow_redirects=False).status_code != 429
+    client.cookies.set("pea_session", "yet-another-one")
+    assert client.get("/api/v1/auth/google/login", follow_redirects=False).status_code == 429
