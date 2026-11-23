@@ -28,6 +28,7 @@ from app.auth import google  # noqa: E402
 from app.db import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Organization, OrganizationDomain, OrganizationMembership, RoleAssignment, User  # noqa: E402
+from app.security import limiter
 
 TABLES = ", ".join([  # emptied before every test; child tables first
     "research_outputs", "notifications", "evaluation_entry_files", "evaluation_entries", "evaluations",
@@ -53,6 +54,7 @@ def schema():
 def clean():
     with engine.begin() as conn:
         conn.execute(text(f"truncate {TABLES} restart identity cascade"))  # truncate skips the append-only trigger
+    limiter.reset()  # rate limits are counted per test
 
 
 @pytest.fixture

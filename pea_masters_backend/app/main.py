@@ -19,6 +19,7 @@ from app import (
     profiles,
     research_output,
     research_outputs,
+    security,
     sent_evaluations,
     units,
     wos,
@@ -30,6 +31,10 @@ from app.db import get_db
 app = FastAPI(title="PEA API", redoc_url=None,
               docs_url="/api/docs" if settings.docs_enabled else None,
               openapi_url="/api/openapi.json" if settings.docs_enabled else None)
+
+# Refuses data changes sent from other websites and applies the rate limits (app/security.py). Registered before
+# security_headers below, so its refusals get those headers too.
+app.middleware("http")(security.protect)
 
 
 @app.middleware("http")

@@ -124,3 +124,12 @@ Logs are capped at 50 MB per container. The containers start again on their own 
   build.
 - The API trusts the visitor address Caddy passes on, so the audit log records real addresses. Caddy ignores addresses
   that visitors make up.
+- The website is served with a **Content Security Policy** (`deploy/Caddyfile`): the browser runs only PEA's own
+  scripts and styles, and contacts only the addresses listed there. When the app starts using a new outside service
+  from the browser (another video site, an API called from a page), add it to the policy, or the browser blocks it.
+  `tests/e2e/test_security_headers.py` checks every page against the policy.
+- The API refuses data changes sent from other websites and limits some actions per person: sign-in, uploads, Web of
+  Science / Crossref / ORCID lookups and people imports (`app/security.py`). Someone over a limit is asked to wait a
+  few minutes. The counts are kept per API worker, so the real ceiling is about twice the number in the rules.
+- Dependabot (`.github/dependabot.yml`) proposes library updates every Monday, and CI checks the libraries for known
+  vulnerabilities on every pull request.
