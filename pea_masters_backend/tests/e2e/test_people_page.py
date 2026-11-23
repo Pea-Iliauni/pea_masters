@@ -23,13 +23,17 @@ def add_people(page: Page, people: list[tuple[str, str | None]]) -> None:
     page.goto("/people")
     page.get_by_role("button", name="Add people").click()
     expect(page).to_have_url(re.compile("/admin/people/import"))
+    # The page has loaded the people and the structure (the template button waits for them): type only then
+    expect(page.get_by_role("button", name="Download template")).to_be_enabled()
     for index, (email, department) in enumerate(people, start=1):
         if index > 1:
             page.get_by_role("button", name="Add row").click()
         page.get_by_label(f"Email, line {index}").fill(email)
+        expect(page.get_by_label(f"Email, line {index}")).to_have_value(email)
         if department:
             page.get_by_label(f"Department, line {index}").select_option(label=department)
     count = len(people)
+    expect(page.get_by_text(f"{count} to register")).to_be_visible()  # every row counted before saving
     page.get_by_role("button", name=f"Register {count} {'person' if count == 1 else 'people'}").click()
     page.get_by_role("alertdialog").get_by_role("button", name="Save").click()
     expect(page.get_by_role("heading", name=re.compile(r"registered$"))).to_be_visible()
