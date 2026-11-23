@@ -88,7 +88,7 @@ jobs:
   browser:
     name: Browser tests
     runs-on: ubuntu-latest
-    needs: [backend, frontend]
+    # Starts alongside the other jobs instead of waiting for them: a run finishes minutes sooner
     services:
       db:
         image: postgres:16-alpine
