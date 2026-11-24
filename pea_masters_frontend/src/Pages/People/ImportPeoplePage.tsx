@@ -79,10 +79,12 @@ export function ImportPeoplePage() {
         if (cancelled) return
         setRegisteredPeople(list.people); setUnits(structure)
         setAccess({ canRegister: list.can_register, canManageRoles: list.can_manage_roles }); setLoadError("")
-        // A Coordinator's first row starts in their department
+        // A Coordinator's first row starts in their department. The row itself stays (same key): replacing it would
+        // redraw its boxes and lose whatever is being typed into them at this moment.
         const coordinated = org.coordinates.map(unit => unit.id)
-        setRows(current => (current.length === 1 && isBlank(current[0])
-          ? [blankRow(structure, { canManageRoles: list.can_manage_roles, coordinated, email: "" })] : current))
+        const start = blankRow(structure, { canManageRoles: list.can_manage_roles, coordinated, email: "" })
+        setRows(current => (current.length === 1 && isBlank(current[0]) && !current[0].departmentId && start.departmentId
+          ? [{ ...current[0], facultyId: start.facultyId, departmentId: start.departmentId }] : current))
       })
       .catch(cause => { if (!cancelled) setLoadError(cause instanceof ApiError ? cause.message : "Couldn't load the organization. Please try again.") })
     return () => { cancelled = true }

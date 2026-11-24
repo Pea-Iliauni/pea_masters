@@ -63,7 +63,8 @@ def test_admin_sets_up_a_department_and_its_coordinator_sees_the_directory(admin
 
     page.get_by_role("button", name="Add department", exact=True).click()
     dialog = page.get_by_role("dialog")
-    expect(dialog.get_by_label("Faculty *")).to_have_value(re.compile(".+"))  # the only faculty is preselected
+    # Other tests may have added faculties to the shared organization already, so choose it rather than expect it
+    dialog.get_by_label("Faculty *").select_option(label=FACULTY)
     dialog.get_by_label("Name in English *").fill(DEPARTMENT)
     dialog.get_by_role("button", name="Add department").click()
     expect(page.get_by_role("status")).to_contain_text(f"{DEPARTMENT} was added.")
@@ -83,7 +84,8 @@ def test_admin_sets_up_a_department_and_its_coordinator_sees_the_directory(admin
     page.keyboard.press("Escape")
     expect(row(page, HEAD_NAME)).to_be_visible()
     expect(row(page, "Test Admin")).to_have_count(0)  # not in a department
-    expect(page.get_by_text("2 of 3")).to_be_visible()
+    # 2 shown, out of everyone in the shared organization (other tests may have added people already)
+    expect(page.get_by_text(re.compile(r"^2 of \d+$"))).to_be_visible()
     page.get_by_role("button", name=re.compile("^Roles:")).click()
     page.get_by_role("dialog", name="Roles").get_by_label("Admin").check()
     page.keyboard.press("Escape")
