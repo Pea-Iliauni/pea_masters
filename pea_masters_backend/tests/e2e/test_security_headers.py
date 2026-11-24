@@ -38,7 +38,7 @@ def policy() -> str:
     return found.group(1).replace("; upgrade-insecure-requests", "")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")  # built once per run, however pytest orders the tests
 def preview(servers):
     if not port_free(PREVIEW_PORT):  # an old preview would answer with an old policy
         pytest.exit(f"Port {PREVIEW_PORT} is in use. Stop whatever runs there and try again.")
@@ -93,11 +93,11 @@ def test_every_page_works_under_the_policy(preview, browser, organization):
     for path, heading in pages.items():
         page.goto(path)
         page.wait_for_load_state("load")
-        page.wait_for_timeout(1500)  # lazily loaded parts of the page; anything blocked is reported by then
         if heading:
             expect(page.get_by_role("heading", name=heading, level=1)).to_be_visible()
         else:
             expect(page.locator(".dashboard-content")).to_be_visible()  # the page drew, it isn't blank
+        page.wait_for_timeout(300)  # the page has drawn; a moment more for anything it loads after that
         assert blocked(page, console) == [], f"{path}: {blocked(page, console)}"
 
     # A few things that load more as you use them: the CV templates, a filter menu, the Excel template
@@ -121,8 +121,7 @@ def test_signed_out_pages_work_under_the_policy(preview, browser):
     for path in ("/login", "/privacy"):
         page.goto(path)
         page.wait_for_load_state("load")
-        page.wait_for_timeout(1500)  # lazily loaded parts of the page; anything blocked is reported by then
-        expect(page.locator("body")).not_to_be_empty()
+        expect(page.get_by_role("heading", level=1)).to_be_visible()
+        page.wait_for_timeout(300)  # the page has drawn; a moment more for anything it loads after that
         assert blocked(page, console) == [], f"{path}: {blocked(page, console)}"
-    expect(page.get_by_role("heading", level=1)).to_be_visible()
     context.close()

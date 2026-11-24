@@ -57,6 +57,7 @@ from tests.e2e import fake_clarivate  # noqa: E402
 BACKEND = Path(__file__).parents[2]
 FRONTEND = BACKEND.parent / "pea_masters_frontend"
 SCREENSHOTS = Path(__file__).parent / "screenshots"
+FAILURES = Path(__file__).parent / "failures"  # a failed test's screenshots and traces (CI keeps them)
 
 
 def port_free(port: int) -> bool:
@@ -162,20 +163,55 @@ def session_cookie(token: str) -> dict:
     return {"name": COOKIE_NAME, "value": token, "url": APP_URL}
 
 
+@pytest.hookimpl(wrapper=True, tryfirst=True)
+def pytest_runtest_makereport(item, call):
+    """Remembers how each stage of a test went, so fixtures can tell whether it failed"""
+    report = yield
+    setattr(item, f"report_{report.when}", report)
+    return report
+
+
+def failed(request) -> bool:
+    report = getattr(request.node, "report_call", None)
+    return bool(report and report.failed)
+
+
+def open_window(browser):
+    """A browser window that records what happens in it, so a failure can be replayed"""
+    context = browser.new_context(base_url=APP_URL, viewport={"width": 1400, "height": 900})
+    context.tracing.start(screenshots=True, snapshots=True, sources=False)
+    return context
+
+
+def close_window(context, request, name: str) -> None:
+    """On a failure, keeps a screenshot of each tab and the trace (open it at https://trace.playwright.dev)"""
+    try:
+        if failed(request):
+            FAILURES.mkdir(exist_ok=True)
+            stem = f"{request.node.name}-{name}".replace("/", "_").replace("[", "_").replace("]", "")
+            for number, page in enumerate(context.pages):
+                page.screenshot(path=FAILURES / f"{stem}-tab{number}.png", full_page=True)
+            context.tracing.stop(path=FAILURES / f"{stem}-trace.zip")
+        else:
+            context.tracing.stop()
+    finally:
+        context.close()
+
+
 @pytest.fixture
-def admin_page(browser, servers, organization):
+def admin_page(browser, servers, organization, request):
     """A browser tab signed in as the Admin."""
     with SessionLocal() as db:
         token, _ = create_session(db, organization["admin_id"], None, "e2e")
         db.commit()
-    context = browser.new_context(base_url=APP_URL, viewport={"width": 1400, "height": 900})
+    context = open_window(browser)
     context.add_cookies([session_cookie(token)])
     yield context.new_page()
-    context.close()
+    close_window(context, request, "admin")
 
 
 @pytest.fixture
-def google_sign_in(browser, servers):
+def google_sign_in(browser, servers, request):
     """Signs someone in as if Google had returned these verified claims; returns their browser tab."""
     contexts = []
 
@@ -184,14 +220,14 @@ def google_sign_in(browser, servers):
                   "name": name, "given_name": name.split()[0], "family_name": name.split()[-1]}
         token, error = complete_login(claims, None, "e2e")
         assert token, f"sign-in refused: {error}"
-        context = browser.new_context(base_url=APP_URL, viewport={"width": 1400, "height": 900})
+        context = open_window(browser)
         context.add_cookies([session_cookie(token)])
-        contexts.append(context)
+        contexts.append((email.split("@")[0], context))
         return context.new_page()
 
     yield sign_in
-    for context in contexts:
-        context.close()
+    for name, context in contexts:
+        close_window(context, request, name)
 
 
 @pytest.fixture

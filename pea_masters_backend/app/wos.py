@@ -103,7 +103,7 @@ def fetch_documents(query: str) -> tuple[int, list[dict[str, Any]]]:
 
 
 def _fold(text: str) -> str:
-    """Lower case without accents, so "Kekelidze" matches "KEKELIDZE" and "Müller" matches "Muller"."""
+    """Lower case without accents, so "Abashidze" matches "ABASHIDZE" and "Müller" matches "Muller"."""
     return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)).casefold().strip()
 
 

@@ -1,5 +1,5 @@
 /*
- * Name guessed from an ISU email address: "giorgi.kekelidze.3@iliauni.edu.ge" → "Giorgi Kekelidze".
+ * Name guessed from an ISU email address: "levan.abashidze.7@iliauni.edu.ge" → "Giorgi Abashidze".
  * Only a starting point while registering someone: their official Google name replaces it at first sign-in.
  * Mirrors name_from_email in pea_masters_backend/app/names.py; keep the two in step.
  */
