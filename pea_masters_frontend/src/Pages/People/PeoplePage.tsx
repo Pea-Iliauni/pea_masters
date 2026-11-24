@@ -89,6 +89,7 @@ export function PeoplePage() {
     }
   }, [org])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- loads from the server when the page opens
   useEffect(() => { void load() }, [load])
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 

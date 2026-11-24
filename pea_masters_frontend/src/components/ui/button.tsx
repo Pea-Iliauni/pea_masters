@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- shadcn/ui keeps helpers (buttonVariants, useSidebar) next to their components */
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"

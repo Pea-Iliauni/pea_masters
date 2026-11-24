@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout"
 import { useQualifications } from "@/Pages/Profile/qualifications/qualifications-store"
 import { saveIdentifiers, useIdentity, useMyProfile } from "@/lib/profile"
-import { SERVER_IDENTIFIERS } from "@/Pages/Profile/sections/IdentifiersCard"
+import { SERVER_IDENTIFIERS } from "@/Pages/Profile/sections/server-identifiers"
 import { savedResearch, useProfileData } from "@/Pages/Profile/profile-data"
 import { useStore } from "@/lib/store"
 import { buildCvSections, sectionCounts } from "./cv-content"
@@ -114,6 +114,12 @@ export function CvBuilderPage() {
     }
   }
 
+  const flash = (message: string) => {
+    setNotice(message)
+    window.clearTimeout(noticeTimer.current)
+    noticeTimer.current = window.setTimeout(() => setNotice(null), 5000)
+  }
+
   const load = async () => {
     setLoadState("loading")
     try {
@@ -137,6 +143,7 @@ export function CvBuilderPage() {
     }
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- loads from the server when the page opens
   useEffect(() => { void load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const change: ChangeCv = update => {
@@ -165,11 +172,6 @@ export function CvBuilderPage() {
 
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 
-  const flash = (message: string) => {
-    setNotice(message)
-    window.clearTimeout(noticeTimer.current)
-    noticeTimer.current = window.setTimeout(() => setNotice(null), 5000)
-  }
 
   const setVisibility = (visibility: Visibility) => {
     if (visibility === cv.visibility) return

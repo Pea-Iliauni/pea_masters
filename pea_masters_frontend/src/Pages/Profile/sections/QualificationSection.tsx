@@ -3,9 +3,8 @@ import { Button } from "@/components/ui/button"
 import { VideoPlayer } from "@/components/media/VideoPlayer"
 import { ProfileEntryForm } from "../qualifications/ProfileEntryForm"
 import { attachmentMeta, type Entry, type SectionDef } from "../qualifications/sections"
+import { entryTitle } from "./entry-title"
 import "../qualifications/QualificationsPage.css"
-
-export const entryTitle = (section: SectionDef, entry: Entry) => section.titleOf(entry.values) || `Untitled ${section.noun}`
 
 function EntryCard({ section, entry, onEdit, onDelete, disabled }: { section: SectionDef; entry: Entry; onEdit: () => void; onDelete: () => void; disabled: boolean }) {
   const title = entryTitle(section, entry)

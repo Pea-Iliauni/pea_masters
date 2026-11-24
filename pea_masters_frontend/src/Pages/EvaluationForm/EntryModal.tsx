@@ -10,7 +10,8 @@ import { useIdentity } from '@/lib/profile'
 import { findDoi } from '@/lib/wos'
 import { EvaluationIcon as Icon, EvaluationModal } from './EvaluationModal'
 import type { EvaluationEntry, RecordDef } from './evaluation-model'
-import { toWosCheck, useDoiCheck, WosPanel } from './WosCheck'
+import { toWosCheck, useDoiCheck } from './doi-check'
+import { WosPanel } from './WosCheck'
 
 /** Where a DOI is already used in the form, so the same article isn't counted twice */
 export type UsedDoi = { recordId: string; description: string }

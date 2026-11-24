@@ -9,18 +9,13 @@ import { formsApi, type FormSummary } from "@/lib/evaluations"
 import { useLanguage } from "@/lib/language-context"
 import { localName } from "@/lib/people"
 import { ConfirmSheet } from "@/Pages/People/ConfirmSheet"
+import { editorPath } from "./editor-path"
 import { countLabel } from "./form-draft"
 import "@/components/forms/forms.css"
 import "@/Pages/People/PeoplePage.css"
 import "./EvaluationForms.css"
 
 const formatDate = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""
-
-/** The address of the editor for a form, a new form, or a copy */
-export function editorPath(orgId: string, formId: string, copyOf?: string) {
-  const query = new URLSearchParams({ org: orgId, ...(copyOf ? { copy: copyOf } : {}) })
-  return `/admin/evaluation-forms/${encodeURIComponent(formId)}?${query}`
-}
 
 /**
  * Admins and Coordinators: the forms they can send to researchers. The built-in ISU form can be viewed and copied;
@@ -51,6 +46,7 @@ export function EvaluationFormsPage() {
     }
   }, [org])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- loads from the server when the page opens
   useEffect(() => { void load() }, [load])
 
   if (!org) return null // RequireStaff only lets Admins and Coordinators in

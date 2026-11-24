@@ -5,15 +5,9 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { ApiError } from "@/lib/api"
 import { CONNECT_ORCID_URL, disconnectOrcid, saveIdentifiers, type Identifiers, type MyProfile } from "@/lib/profile"
 import { PROFILE_DEFS, type ProfileKey } from "@/Pages/CvBuilder/identifiers"
+import { SERVER_IDENTIFIERS } from "./server-identifiers"
 import "@/components/forms/forms.css"
 import "../GeneralInformationPage.css"
-
-/** The CV builder's profile keys and the server's names for the same identifiers */
-export const SERVER_IDENTIFIERS: { key: ProfileKey; server: keyof Identifiers; use: string }[] = [
-  { key: "researcherId", server: "researcher_id", use: "Finds your articles in Web of Science." },
-  { key: "orcid", server: "orcid", use: "Also used to find your articles." },
-  { key: "scopus", server: "scopus_id", use: "Shown on your CV." },
-]
 
 /** What happened on the way back from ORCID (/profile?orcid=…) */
 const ORCID_OUTCOMES: Record<string, { ok: boolean; text: string }> = {
