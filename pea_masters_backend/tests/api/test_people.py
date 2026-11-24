@@ -323,31 +323,31 @@ def test_name_is_guessed_from_the_email_when_left_empty(as_admin, base):
     def without_name(email):
         return as_admin.post(f"{base}/people", json={"email": email, "roles": ["member"]})
 
-    person = without_name("giorgi.kekelidze.3@iliauni.edu.ge").json()
-    assert (person["display_name"], person["name_source"]) == ("Giorgi Kekelidze", "registration")
+    person = without_name("levan.abashidze.7@iliauni.edu.ge").json()
+    assert (person["display_name"], person["name_source"]) == ("Levan Abashidze", "registration")
     assert error_code(without_name("gk@iliauni.edu.ge")) == "name_required"
 
 
 def test_first_sign_in_replaces_the_registered_name_with_googles(as_admin, base, client, google_returns, db):
-    person = register(as_admin, base, "giorgi.kekelidze.3@iliauni.edu.ge", name="Giorgi Kekelidz").json()  # typo
-    assert sign_in_with_google(client, google_returns, person["email"], "Giorgi", "Kekelidze") \
+    person = register(as_admin, base, "levan.abashidze.7@iliauni.edu.ge", name="Levan Abashidz").json()  # typo
+    assert sign_in_with_google(client, google_returns, person["email"], "Levan", "Abashidze") \
         .headers["location"].endswith("/home")
 
     me = client.get("/api/v1/auth/me").json()
-    assert (me["display_name"], me["given_name"], me["family_name"]) == ("Giorgi Kekelidze", "Giorgi", "Kekelidze")
+    assert (me["display_name"], me["given_name"], me["family_name"]) == ("Levan Abashidze", "Levan", "Abashidze")
     assert as_admin.get(f"{base}/people/{person['id']}").json()["name_source"] == "google"
     log = db.scalar(select(AuditLog).where(AuditLog.action == "person.name_from_google"))
-    assert log.before["display_name"] == "Giorgi Kekelidz" and log.after["display_name"] == "Giorgi Kekelidze"
+    assert log.before["display_name"] == "Levan Abashidz" and log.after["display_name"] == "Levan Abashidze"
 
 
 def test_a_manual_correction_is_never_overwritten_by_google(as_admin, base, client, google_returns):
-    person = register(as_admin, base, "giorgi.kekelidze.3@iliauni.edu.ge").json()
-    sign_in_with_google(client, google_returns, person["email"], "Giorgi", "Kekelidze")
+    person = register(as_admin, base, "levan.abashidze.7@iliauni.edu.ge").json()
+    sign_in_with_google(client, google_returns, person["email"], "Levan", "Abashidze")
 
-    corrected = as_admin.patch(f"{base}/people/{person['id']}", json={"display_name": "Giorgi K. Kekelidze"}).json()
+    corrected = as_admin.patch(f"{base}/people/{person['id']}", json={"display_name": "Levan K. Abashidze"}).json()
     assert corrected["name_source"] == "manual"
-    sign_in_with_google(client, google_returns, person["email"], "Giorgi", "Kekelidze")  # signs in again later
-    assert client.get("/api/v1/auth/me").json()["display_name"] == "Giorgi K. Kekelidze"
+    sign_in_with_google(client, google_returns, person["email"], "Levan", "Abashidze")  # signs in again later
+    assert client.get("/api/v1/auth/me").json()["display_name"] == "Levan K. Abashidze"
 
 
 def test_google_name_changes_are_followed(as_admin, base, client, google_returns):

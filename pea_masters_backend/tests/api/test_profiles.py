@@ -31,12 +31,12 @@ def test_new_profile_is_empty_with_institutional_details(as_admin, signed_in, ba
     faculty = add_faculty(as_admin, base)
     cs = add_department(as_admin, base, "Computer Science", faculty)
     professor = as_admin.post(f"{base}/positions", json={"name_en": "Associate Professor"}).json()["id"]
-    person = register(as_admin, base, "giorgi.kekelidze.3@iliauni.edu.ge", department_id=cs,
-                      name="Giorgi Kekelidze").json()
+    person = register(as_admin, base, "levan.abashidze.7@iliauni.edu.ge", department_id=cs,
+                      name="Levan Abashidze").json()
     as_admin.patch(f"{base}/people/{person['id']}", json={"position_id": professor})
 
     profile = as_person(signed_in, db, person).get(ME).json()
-    assert (profile["display_name"], profile["email"]) == ("Giorgi Kekelidze", "giorgi.kekelidze.3@iliauni.edu.ge")
+    assert (profile["display_name"], profile["email"]) == ("Levan Abashidze", "levan.abashidze.7@iliauni.edu.ge")
     assert profile["biography"] == {} and profile["photo_url"] is None
     [place] = profile["affiliations"]
     assert place["organization"]["name"]["en"] == "Ilia State University"
