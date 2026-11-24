@@ -103,6 +103,7 @@ export function SendEvaluationsPage() {
     }
   }, [org, periodId])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- starts again (empty list, nobody selected) for the period just chosen, and loads its researchers
   useEffect(() => { setRoster(null); setSelected(new Set()); void loadRoster() }, [loadRoster])
 
   if (!org) return null // RequireStaff only lets Admins and Coordinators in

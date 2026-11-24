@@ -27,19 +27,22 @@ export function PersonPage() {
   const session = useSession()
   const { language } = useLanguage()
   const orgId = params.get("org") ?? session?.organizations[0]?.id ?? ""
-  const [page, setPage] = useState<PageData | null>(null)
-  const [error, setError] = useState("")
+  // What was loaded, and for whom: opening another person shows "Loading…" until their page arrives
+  const shown = `${orgId}/${userId}`
+  const [loaded, setLoaded] = useState<{ for: string; page: PageData | null; error: string } | null>(null)
+  const page = loaded?.for === shown ? loaded.page : null
+  const error = loaded?.for === shown ? loaded.error : ""
 
   useEffect(() => {
     if (!orgId || !userId) return
     let cancelled = false
-    setPage(null)
+    const key = `${orgId}/${userId}`
     peopleApi.page(orgId, userId)
-      .then(result => { if (!cancelled) { setPage(result); setError("") } })
+      .then(result => { if (!cancelled) setLoaded({ for: key, page: result, error: "" }) })
       .catch(cause => {
         if (cancelled) return
-        setError(cause instanceof ApiError && cause.status === 404 ? "This person isn't in PEA, or is no longer active." :
-          cause instanceof ApiError ? cause.message : "Couldn't load this profile. Please try again.")
+        setLoaded({ for: key, page: null, error: cause instanceof ApiError && cause.status === 404 ? "This person isn't in PEA, or is no longer active." :
+          cause instanceof ApiError ? cause.message : "Couldn't load this profile. Please try again." })
       })
     return () => { cancelled = true }
   }, [orgId, userId])

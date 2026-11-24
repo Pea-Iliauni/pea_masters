@@ -2,26 +2,15 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { BookOpen, ChevronDown, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cleanDoi, OUTPUT_KINDS, useOutputs, type ResearchOutput } from '@/lib/research-outputs'
-import { findDoi, titleKey } from '@/lib/wos'
+import { OUTPUT_KINDS, useOutputs, type ResearchOutput } from '@/lib/research-outputs'
 import type { EvaluationEntry } from './evaluation-model'
+import { outputInForm } from './output-in-form'
 
 const DISMISSED_KEY = 'pea-evaluation-dismissed-outputs-v1'
 const SHOWN = 5
 
 function readDismissed(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? '[]') as string[]) } catch { return new Set() }
-}
-
-/** Whether a research output is already somewhere in the form: by DOI, or its title inside an entry's description */
-export function outputInForm(output: ResearchOutput, entries: EvaluationEntry[]) {
-  const title = titleKey(output.title)
-  return entries.some(entry => {
-    const doi = entry.wos?.doi ?? findDoi(entry.detail) ?? findDoi(entry.description)
-    if (output.doi && doi && cleanDoi(doi) === output.doi) return true
-    if (output.url && entry.detail.trim() === output.url) return true
-    return title.length > 8 && titleKey(entry.description).includes(title)
-  })
 }
 
 /**

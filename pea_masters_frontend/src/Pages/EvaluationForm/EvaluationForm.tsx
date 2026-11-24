@@ -12,7 +12,8 @@ import { EntryModal, type UsedDoi } from './EntryModal'
 import { EvaluationIcon as Icon, EvaluationModal } from './EvaluationModal'
 import { WosBadge } from './WosCheck'
 import { MissingFromForm } from './MissingFromForm'
-import { FromProfile, outputInForm } from './FromProfile'
+import { FromProfile } from './FromProfile'
+import { outputInForm } from './output-in-form'
 import { outputCitation, useOutputs, type ResearchOutput } from '@/lib/research-outputs'
 import {
   byItem, changesSince, dayLabel, daysUntil, formScore, isSent, recordScore, toForm,
@@ -122,6 +123,7 @@ export function EvaluationForm() {
     const entry = evaluation.entries.find(item => item.id === target.entryId)
     const record = form.items.get(target.recordId)
     const part = form.parts.find(item => item.items.some(other => other.id === target.recordId))
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- opens the entry a notification link points to, once the evaluation has loaded
     if (part) setTab(part.id)
     if (entry && record && evaluation.can_edit) setEditing({ record, entry })
   }, [evaluation, form, location.key, location.pathname, location.state, navigate])

@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent } from "react"
+import { useEffect, useRef, useState, type DragEvent } from "react"
 import { Check, FileText, Image as ImageIcon, LoaderCircle, Upload, X } from "lucide-react"
 import { ApiError } from "@/lib/api"
 import { entriesApi } from "@/lib/profile-entries"
@@ -28,7 +28,7 @@ export function DocumentUpload({ label, documents, onChange, onBusyChange }: Pro
   const [uploading, setUploading] = useState<string[]>([])
   // The latest list, so uploads that finish one after another all land in it
   const latest = useRef(documents)
-  latest.current = documents
+  useEffect(() => { latest.current = documents }, [documents])
 
   const addFiles = async (files: FileList | null) => {
     if (!files?.length) return

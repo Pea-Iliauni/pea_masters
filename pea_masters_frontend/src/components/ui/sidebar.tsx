@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- shadcn/ui keeps helpers (buttonVariants, useSidebar) next to their components */
 "use client"
 
 import * as React from "react"

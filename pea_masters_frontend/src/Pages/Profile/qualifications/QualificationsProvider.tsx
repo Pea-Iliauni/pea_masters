@@ -33,6 +33,7 @@ export function QualificationsProvider({ children }: { children: ReactNode }) {
 
   // Load for whoever signs in; forget it all when they sign out
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads the signed-in person's entries, and forgets them on sign-out
     if (userId && loadedFor !== userId) void load(userId)
     if (!userId && loadedFor) { setEntries({}); setLoadedFor(null); setStatus("loading") }
   }, [userId, loadedFor, load])

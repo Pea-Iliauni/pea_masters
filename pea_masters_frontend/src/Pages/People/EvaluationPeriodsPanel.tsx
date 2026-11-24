@@ -41,6 +41,7 @@ export function EvaluationPeriodsPanel({ orgId, onChanged }: { orgId: string; on
     }
   }, [orgId])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- loads from the server when the page opens
   useEffect(() => { void load() }, [load])
 
   const save = async (values: Record<string, string>) => {

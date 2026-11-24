@@ -58,6 +58,9 @@ jobs:
         with: { bun-version: "${{ env.BUN_VERSION }}" }
       - name: Install packages
         run: bun install --frozen-lockfile
+      - name: Lint
+        # ESLint, including the React Compiler's rules (eslint.config.js)
+        run: bun run lint
       - name: Type check and build
         run: bun run build
 

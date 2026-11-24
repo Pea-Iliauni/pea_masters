@@ -13,7 +13,7 @@ import {
   type Draft, type DraftItem, type DraftPart, type Problems,
 } from "./form-draft"
 import { FormPreview } from "./FormPreview"
-import { editorPath } from "./EvaluationFormsPage"
+import { editorPath } from "./editor-path"
 import "@/components/forms/forms.css"
 import "@/Pages/People/PeoplePage.css"
 import "./EvaluationForms.css"
