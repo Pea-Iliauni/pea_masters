@@ -18,7 +18,7 @@ def _capitalize(part: str) -> str:
 
 
 def name_from_email(email: str) -> str | None:
-    """Guesses "Giorgi Kekelidze" from "giorgi.kekelidze.3@iliauni.edu.ge" (ISU's name.surname.number format).
+    """Guesses "Giorgi Abashidze" from "levan.abashidze.7@iliauni.edu.ge" (ISU's name.surname.number format).
 
     Returns None when the address doesn't look like a name, so callers can ask for one instead of guessing badly.
     """
