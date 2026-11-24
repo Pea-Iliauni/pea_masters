@@ -110,6 +110,8 @@ jobs:
         run: uv run playwright install --with-deps chromium
       - name: Browser tests
         working-directory: pea_masters_backend
+        # A failed test leaves screenshots and a Playwright trace in tests/e2e/failures (tests/e2e/conftest.py);
+        # open a trace at https://trace.playwright.dev
         run: uv run pytest tests/e2e
       - name: Keep screenshots and server logs when something fails
         if: failure()
@@ -119,4 +121,5 @@ jobs:
           path: |
             pea_masters_backend/tests/e2e/screenshots/
             pea_masters_backend/tests/e2e/logs/
+            pea_masters_backend/tests/e2e/failures/
           retention-days: 7

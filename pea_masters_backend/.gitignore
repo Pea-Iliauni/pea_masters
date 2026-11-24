@@ -15,6 +15,7 @@ htmlcov/
 # end-to-end test output
 tests/e2e/screenshots/
 tests/e2e/logs/
+tests/e2e/failures/
 test-results/
 
 # uploaded files (development)

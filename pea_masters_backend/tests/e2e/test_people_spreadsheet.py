@@ -207,6 +207,26 @@ def test_leaving_with_an_unsaved_list_asks_first(admin_page: Page):
     expect(page.get_by_label("Email, line 1")).to_have_value("someone.new@iliauni.edu.ge")
 
 
+def test_the_first_row_stays_put_while_the_page_loads(admin_page: Page):
+    """The first row's boxes are the same ones before and after the organization's people and departments arrive.
+    If the page swapped the row for a new one, whatever was being typed at that moment would be lost."""
+    page = admin_page
+    people_list = re.compile(r"/api/v1/orgs/[^/]+/people$")
+    held = []  # the page's request for the people list, answered only when the test says so
+    page.route(people_list, lambda route: held.append(route))
+    page.goto("/admin/people/import")
+    email = page.get_by_label("Email, line 1").element_handle()
+    page.wait_for_timeout(200)
+    assert held, "the page didn't ask for the people list"
+    for route in held:
+        route.continue_()
+    page.unroute(people_list)
+    expect(page.get_by_role("button", name="Download template")).to_be_enabled()  # the page has what it loads
+    assert email.evaluate("box => box.isConnected"), "the first row was replaced while the page loaded"
+    page.get_by_label("Email, line 1").fill("typed.early@iliauni.edu.ge")
+    expect(page.get_by_text("1 to register")).to_be_visible()
+
+
 def test_researchers_cant_open_the_list_page(admin_page: Page, google_sign_in, organization):
     api(admin_page, "POST", f"/orgs/{organization['org_id']}/people",
         {"email": "not.staff.import@iliauni.edu.ge", "display_name": "Not Staff", "roles": ["member"]})
